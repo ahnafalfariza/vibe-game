@@ -153,11 +153,14 @@ function makeRidgeTexture(scene: Phaser.Scene, key: string, texH: number, style:
     }
     return y;
   };
+  // Draw a little past both edges: the profile is periodic, and this keeps
+  // anti-aliased polygon edges out of the texture so tiles join invisibly.
+  const pad = step * 2;
   const ridge: Phaser.Math.Vector2[] = [];
-  for (let x = 0; x <= TEX_W; x += step) ridge.push(new Phaser.Math.Vector2(x, profile(x)));
+  for (let x = -pad; x <= TEX_W + pad; x += step) ridge.push(new Phaser.Math.Vector2(x, profile(x)));
 
   g.fillStyle(style.color, 1);
-  g.fillPoints([...ridge, new Phaser.Math.Vector2(TEX_W, texH), new Phaser.Math.Vector2(0, texH)], true);
+  g.fillPoints([...ridge, new Phaser.Math.Vector2(TEX_W + pad, texH + pad), new Phaser.Math.Vector2(-pad, texH + pad)], true);
 
   // Snow caps: the band between the ridge and a wavy snowline.
   const snowline = (x: number) =>
@@ -170,7 +173,7 @@ function makeRidgeTexture(scene: Phaser.Scene, key: string, texH: number, style:
     // A band of pine silhouettes along the foot of the ridge.
     g.fillStyle(style.forest, 1);
     const forestTop = texH * 0.72;
-    g.fillRect(0, forestTop, TEX_W, texH - forestTop);
+    g.fillRect(-pad, forestTop, TEX_W + 2 * pad, texH - forestTop + pad);
     let seed = 7;
     const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
     for (let x = 0; x < TEX_W; x += 11 + rand() * 10) {

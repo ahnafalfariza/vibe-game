@@ -23,6 +23,8 @@ export interface GameContext {
 /** World px visible vertically at zoom multiplier 1 (the design height). */
 const DESIGN_HEIGHT = 720;
 const MIN_ZOOM_MUL = 0.42;
+/** Space kept above the skier's feet when framing a jump: body height plus margin, world px. */
+const SKIER_HEADROOM = 140;
 
 function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
@@ -197,31 +199,66 @@ export class PlayScene extends Phaser.Scene {
     this.updateDebug(dt, zoom);
   }
 
-  /** Frame the skier and the snow below them; zoom out with speed and height. Returns the zoom. */
+  /**
+   * Frame the skier and, in the air, where they're going to land (you need to
+   * see the landing to time a flip). Zoom out with speed. Returns the zoom.
+   */
   private updateCamera(x: number, y: number, dt: number): number {
     const { width, height } = this.scale;
     const sk = this.run.skier;
     const v = this.view;
-    const air = sk.heightAboveGround();
+    const baseZoom = height / DESIGN_HEIGHT;
 
-    const targetMul = Math.max(MIN_ZOOM_MUL, 1 / (1 + Math.max(0, sk.velocity - 700) / 2200 + air / 1000));
-    v.zoomMul = damp(v.zoomMul, targetMul, targetMul < v.zoomMul ? 3 : 1.5, dt);
-    const zoom = (height / DESIGN_HEIGHT) * v.zoomMul;
+    // Box that must stay on screen: the skier, plus apex and landing spot when airborne.
+    const airborne = sk.mode === 'air';
+    let right = x;
+    let top = y;
+    let bottom = y;
+    if (airborne) {
+      const land = this.predictLanding();
+      right = Math.max(x, land.x);
+      bottom = Math.max(y, land.y);
+      const apex = sk.vy < 0 ? y - (sk.vy * sk.vy) / (2 * this.ctx.tuning.gravity) : y;
+      top = apex - SKIER_HEADROOM;
+    }
+    const fitMul = Math.min(
+      width / (baseZoom * ((right - x) / 0.62 + 200)),
+      height / (baseZoom * ((bottom - top) / 0.7 + 220)),
+    );
+    const speedMul = 1 / (1 + Math.max(0, sk.velocity - 700) / 2200);
+    const targetMul = Math.max(MIN_ZOOM_MUL, Math.min(1, speedMul, fitMul));
+    v.zoomMul = damp(v.zoomMul, targetMul, targetMul < v.zoomMul ? 4 : 1.5, dt);
+    const zoom = baseZoom * v.zoomMul;
     const viewW = width / zoom;
     const viewH = height / zoom;
 
-    // Keep the skier left of centre (the mountain is ahead), and when airborne
-    // aim between the skier and the ground so the landing is visible.
-    const targetLeadX = viewW * 0.14 + Math.max(0, sk.vx) * 0.08;
-    const targetLeadY = air * 0.5 + viewH * 0.06;
+    // Keep the skier left of centre (the mountain is ahead) and centre the box.
+    const targetLeadX = Math.max(viewW * 0.14 + Math.max(0, sk.vx) * 0.08, (right - x) * 0.5);
+    const targetLeadY = (top + bottom) / 2 - y + (airborne ? 0 : viewH * 0.06);
     v.leadX = damp(v.leadX, targetLeadX, 3, dt);
-    v.leadY = damp(v.leadY, targetLeadY, 4, dt);
+    v.leadY = damp(v.leadY, targetLeadY, airborne ? 8 : 4, dt);
     v.x = x + v.leadX;
     v.y = y + v.leadY;
 
     this.worldCam.setZoom(zoom);
     this.worldCam.centerOn(v.x, v.y);
     return zoom;
+  }
+
+  /** Where a drag-free projectile from the skier's current state meets the snow. */
+  private predictLanding(): { x: number; y: number } {
+    const sk = this.run.skier;
+    const g = this.ctx.tuning.gravity;
+    const step = 1 / 30;
+    let { x, y, vx, vy } = sk;
+    for (let i = 0; i < 150; i++) {
+      vy += g * step;
+      x += vx * step;
+      y += vy * step;
+      const ground = this.run.terrain.height(x);
+      if (y >= ground) return { x, y: ground };
+    }
+    return { x, y };
   }
 
   private handleEvents(zoom: number): void {

@@ -54,10 +54,13 @@ export class TerrainView {
     const x1 = x0 + CHUNK_W + 2;
     const top: Phaser.Math.Vector2[] = [];
     let maxY = -Infinity;
-    for (let x = x0 - 2; x <= x1; x += SAMPLE_STEP) {
+    // Sample exactly at both ends so the chunk's sides are vertical: slanted
+    // sides would let a sliver of the top band show through the neighbour.
+    for (let i = 0, x = x0 - 2; ; i++, x = Math.min(x0 - 2 + i * SAMPLE_STEP, x1)) {
       const y = this.terrain.height(x);
       top.push(new Phaser.Math.Vector2(x, y));
       maxY = Math.max(maxY, y);
+      if (x >= x1) break;
     }
     const bottom = maxY + FILL_DEPTH;
 

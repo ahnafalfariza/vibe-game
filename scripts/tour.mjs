@@ -16,11 +16,11 @@ const [w, h, dpr] = (process.env.VIEW ?? '1280x720x1').split('x').map(Number);
 const page = await browser.newPage({ viewport: { width: w, height: h }, deviceScaleFactor: dpr });
 const errors = [];
 page.on('pageerror', (e) => errors.push(e.message));
+// Freeze the page clock: game time only moves when we say so, however long
+// each (software-rendered) frame takes for real.
 await page.clock.install({ time: 0 });
+await page.clock.pauseAt(1000);
 await page.goto(`http://localhost:4175/?seed=${process.env.SEED ?? 7}${process.env.DEBUG ? '&debug' : ''}`);
-// Freeze the page clock: from here on, game time only moves when we say so,
-// however long each (software-rendered) frame takes for real.
-await page.clock.pauseAt((await page.evaluate(() => Date.now())) + 100);
 // Let fonts/boot finish on the fake clock.
 for (let i = 0; i < 40 && !(await page.evaluate(() => !!window.__game?.scene?.getScene('play')?.run)); i++) {
   await page.clock.runFor(100);
@@ -49,8 +49,11 @@ for (let i = 0; i < 600; i++) {
 await page.keyboard.down('Space');
 await frames(400);
 await shot('2-flipping');
-await frames(420);
+// Release like a player would: when most of the way round.
+for (let i = 0; i < 200 && (await state()).spin > -250; i++) await frames(16);
 await page.keyboard.up('Space');
+await frames(300);
+await shot('2b-coming-down');
 for (let i = 0; i < 300 && (await state()).mode === 'air'; i++) await frames(16);
 await frames(120);
 await shot('3-landed');
