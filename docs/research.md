@@ -1,6 +1,6 @@
 # Ski Safari–style game: research & plan
 
-Status: research / pre-production. Nothing is built yet.
+Status: Phase 0 (feel prototype) built. See README.md.
 
 ## 1. What Ski Safari actually is
 
@@ -186,12 +186,65 @@ Key design decisions:
 5. **Scope creep.** Enforce the phase gates. Nothing from Phase 2 goes in while
    Phase 0 feels floaty.
 
-## 6. Open decisions (owner: user)
+## 6. Decisions (2026-09-30)
 
-- Target: web first (recommended) or native app stores?
-- Goal: learning / fun, portfolio, or something to publish?
-- Art: code-drawn vector (recommended to start) or supplied sprites?
-- An original name for the game.
+| Question | Decision |
+|---|---|
+| Platform | Web first (desktop + mobile browser) |
+| Goal | Learning to make fun games + portfolio. Not commercial, not published to stores. |
+| Name | **Selancar Ahay** |
+| Art | See §7. Start with shapes drawn in code; bring in AI-generated characters only once the style is locked. |
+
+## 7. Art direction and where the sprites come from
+
+**Style:** flat, clean, cute vector: soft blues for the world, warm colours
+(orange jacket, yellow beanie, pink scarf) for anything the player must track.
+All colours live in `src/render/palette.ts`.
+
+**What needs art, and what doesn't:**
+- The slope, sky, mountains, trees and snow *must* be drawn in code anyway,
+  because the terrain is procedural. This is most of the screen and it is
+  already done.
+- Only the characters and props need to be designed: the skier, penguin,
+  yeti, eagle, snowmobile, rocks and cabins. That is roughly 10–15 assets.
+- **Don't animate frame by frame.** Use one rigid pose per character (or a
+  few parts) and animate in code: rotation, squash-and-stretch, a fluttering
+  scarf. AI tools are still bad at consistent animation frames. The flip
+  mechanic already rotates the whole body, which is exactly what Ski Safari
+  does.
+
+**Options, ranked for this project:**
+1. **Shapes drawn in code** (the current skier). Free, crisp at any zoom, one
+   palette, no licence questions. It hits its limit on characters that need
+   charm, like the yeti's face.
+2. **Recraft**, for characters. It generates real **SVG vector** art with a
+   reusable *style ID* (upload 1–5 reference images), which is the answer to
+   the "every AI image looks different" problem. It has an official hosted MCP
+   server: `claude mcp add --transport http recraft https://mcp.recraft.ai/mcp`
+   (sign in through the browser, no API key).
+   - **Licence:** on the free plan, Recraft owns the images and makes them
+     public. One paid month (~$12) gives you the rights to what you make that
+     month.
+   - **This cloud environment:** the connector must be added in claude.ai
+     settings, and `img.recraft.ai` must be allowed in the environment's
+     network settings, or the downloads fail.
+3. **OpenAI gpt-image** (through a community MCP): transparent PNGs, and you own
+   the output. It is raster only and has no saved style, so consistency is
+   harder than with Recraft.
+4. **Kenney.nl CC0 packs** (Animal Pack has a penguin; Background Elements;
+   Platformer Art Winter). Free and legally clean, but there is no yeti, skier
+   or snowmobile, and mixing in art from other sources will clash.
+5. Not a fit: PixelLab and Retro Diffusion (pixel art only), Scenario (overkill
+   for about 10 sprites).
+
+**Keeping AI art consistent:**
+- Fix the palette and outline rules in every prompt.
+- Reuse one style ID.
+- Generate related sprites together on one sheet.
+- Remove backgrounds and normalise sizes afterwards.
+
+(Research from search summaries, September 2026. Recheck prices and terms
+before paying.)
 
 ## Sources
 
@@ -209,3 +262,8 @@ Key design decisions:
 - [Rapier: CCD docs](https://rapier.rs/docs/user_guides/javascript/rigid_body_ccd/)
 - [Phaser vs PixiJS (2026)](https://generalistprogrammer.com/comparisons/phaser-vs-pixijs)
 - [Emanuele Feronato: Tiny Wings terrain with Box2D](https://emanueleferonato.com/2011/07/14/create-a-terrain-like-the-one-in-tiny-wings-with-flash-and-box2d/)
+- [Recraft hosted MCP server](https://www.recraft.ai/docs/mcp-reference/remote-server)
+- [Recraft styles API](https://www.recraft.ai/docs/api-reference/styles)
+- [Recraft image ownership](https://www.recraft.ai/docs/trust-and-security/ownership)
+- [Kenney Animal Pack (CC0)](https://kenney.nl/assets/animal-pack)
+- [Why AI can't make game-ready spritesheets (Gamelabs)](https://gamelabstudio.co/blog/why-ai-cant-make-game-ready-spritesheets)

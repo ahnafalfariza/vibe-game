@@ -1,0 +1,54 @@
+import Phaser from 'phaser';
+import '@fontsource/fredoka/500.css';
+import '@fontsource/fredoka/600.css';
+import './style.css';
+import { PlayScene, type GameContext } from './scenes/PlayScene';
+import { createTuning } from './tuning';
+import { Tuner, loadSavedTuning } from './ui/tuner';
+
+async function main(): Promise<void> {
+  // Make sure the UI font is ready before Phaser rasterises any text.
+  await Promise.all([document.fonts.load('500 32px Fredoka'), document.fonts.load('600 32px Fredoka')]).catch(() => undefined);
+
+  const params = new URLSearchParams(location.search);
+  const seedParam = params.get('seed');
+  const tuning = createTuning(loadSavedTuning());
+
+  let game: Phaser.Game | null = null;
+  const ctx: GameContext = {
+    tuning,
+    tuner: new Tuner(tuning, { newRun: () => (game?.scene.getScene('play') as PlayScene | null)?.newRun() }),
+    fixedSeed: seedParam !== null && Number.isFinite(Number(seedParam)) ? Number(seedParam) >>> 0 : null,
+    debug: params.has('debug'),
+    touch: matchMedia('(pointer: coarse)').matches,
+  };
+
+  // Render at device resolution (capped at 2x) and scale the canvas down with
+  // CSS, so everything stays crisp on high-DPI phones.
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  game = new Phaser.Game({
+    type: Phaser.AUTO,
+    parent: 'game',
+    backgroundColor: '#d9f0ff',
+    width: Math.round(window.innerWidth * dpr),
+    height: Math.round(window.innerHeight * dpr),
+    scale: { mode: Phaser.Scale.NONE, zoom: 1 / dpr },
+    render: { antialias: true },
+    input: { activePointers: 3 },
+    banner: false,
+    scene: [new PlayScene(ctx)],
+  });
+
+  const resize = () => {
+    game?.scale.resize(Math.round(window.innerWidth * dpr), Math.round(window.innerHeight * dpr));
+    game?.scale.setZoom(1 / dpr);
+  };
+  window.addEventListener('resize', resize);
+  window.addEventListener('orientationchange', () => setTimeout(resize, 200));
+
+  if (params.has('tune')) ctx.tuner.toggle();
+  // Handy for poking at the game from the console / automated smoke tests.
+  (window as unknown as { __game: Phaser.Game }).__game = game;
+}
+
+void main();
