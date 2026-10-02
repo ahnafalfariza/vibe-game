@@ -3,4 +3,4 @@ dist/
 .vite/
 *.log
 test-results/
-screenshots/
+/screenshots/
