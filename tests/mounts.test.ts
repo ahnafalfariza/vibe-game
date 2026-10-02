@@ -367,6 +367,17 @@ describe('Eagle', () => {
     expect(find(events, 'land')?.quality).not.toBe('crash');
   });
 
+  it('grabs you just the same when you hold through the jump (spinning into a backflip)', () => {
+    for (const startMount of [undefined, 'penguin'] as const) {
+      const run = bench({ startMount });
+      const sk = run.skier;
+      const eagle = run.spawner.addMount('eagle', 650);
+      stepUntil(run, 3, () => sk.x > eagle.x - 160);
+      const events = stepUntil(run, 1, has('mount'), (t) => ({ held: true, pressed: t === 0 }));
+      expect(find(events, 'mount'), `on ${startMount ?? 'foot'}`).toMatchObject({ kind: 'eagle' });
+    }
+  });
+
   it('lets you flip after it lets go, once you press again', () => {
     const run = bench({ startMount: 'eagle' });
     const sk = run.skier;

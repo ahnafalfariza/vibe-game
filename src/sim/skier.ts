@@ -188,10 +188,10 @@ export class Skier {
     return Math.max(0, this.ground.height(this.x) - this.y);
   }
 
-  /** Does a circle at (x, y) with radius r overlap the body hitbox? */
-  touches(x: number, y: number, r: number): boolean {
-    const ux = Math.sin(this.angle);
-    const uy = -Math.cos(this.angle);
+  /** Does a circle at (x, y) with radius r overlap the body hitbox (posed at `angle`, by default the body's own)? */
+  touches(x: number, y: number, r: number, angle = this.angle): boolean {
+    const ux = Math.sin(angle);
+    const uy = -Math.cos(angle);
     const hit = (up: number, cr: number) => {
       const dx = this.x + ux * up - x;
       const dy = this.y + uy * up - y;

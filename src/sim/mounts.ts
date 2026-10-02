@@ -233,7 +233,11 @@ export class Mounts {
       }
       if (skier.mode === 'crash' || skier.carried || Math.abs(m.x - skier.x) > 200) continue;
       const s = MOUNTS[m.kind];
-      if (skier.touches(m.x, m.y - s.up, s.r)) {
+      // Mid-backflip the body hangs below the feet, out of an eagle's reach
+      // overhead: let it grab as if you were upright, so holding through the
+      // jump reaches as far as a tap.
+      const upright = m.kind === 'eagle' && skier.touches(m.x, m.y - s.up, s.r, 0);
+      if (upright || skier.touches(m.x, m.y - s.up, s.r)) {
         m.taken = true;
         this.board(m.kind, skier, events);
       }
