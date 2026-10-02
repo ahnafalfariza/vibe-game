@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { palette } from './palette';
+import { currentBiome } from '../biomes';
 
 // Snow spray from the skis, landing puffs, and screen-space falling snow.
 
@@ -82,7 +83,7 @@ export class Snowfall {
   resize(width: number, height: number): void {
     this.width = width;
     this.height = height;
-    const count = Math.round((width * height) / 22000);
+    const count = Math.round(((width * height) / 22000) * currentBiome().snowfall);
     const unit = height / 720;
     this.flakes = Array.from({ length: count }, () => {
       const depth = 0.3 + Math.random() * 0.7;

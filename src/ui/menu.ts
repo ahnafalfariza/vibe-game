@@ -2,6 +2,8 @@
 // the canvas: real buttons are crisp, keyboard-focusable and easy to style,
 // and they swallow taps so menu clicks never reach the game.
 
+import { BIOMES, isBiomeUnlocked } from '../biomes';
+
 const BEST_KEY = 'yeti-set-go.best';
 
 export type Screen = 'title' | 'pause' | 'over';
@@ -17,6 +19,8 @@ export interface MenuActions {
   /** Returns the new music-on state. */
   toggleMusic(): boolean;
   click(): void;
+  /** The title-screen picker moved to this biome (locked ones too, as a preview). */
+  biome(id: string): void;
 }
 
 export interface RunResult {
@@ -40,12 +44,14 @@ export class Menu {
   private readonly pauseButton: HTMLButtonElement;
   screen: Screen | null = null;
   private shownAt = 0;
+  private biomeIndex: number;
 
   constructor(
     private readonly actions: MenuActions,
     touch: boolean,
     muted: boolean,
     music: boolean,
+    biome: string,
   ) {
     const controls = touch ? 'Tap to jump · hold to backflip' : 'Space to jump · hold to backflip · Esc to pause';
     this.root = document.createElement('div');
@@ -55,6 +61,11 @@ export class Menu {
       <section class="screen title" hidden>
         <h1>Yeti, Set, Go!</h1>
         <p class="tagline">Outrun the avalanche. Flip for points.</p>
+        <div class="biome-picker" role="group" aria-label="Mountain">
+          <button class="btn small arrow" data-act="biome-prev" aria-label="Previous mountain">‹</button>
+          <p class="biome" aria-live="polite"><span class="biome-name"></span><span class="biome-lock"></span></p>
+          <button class="btn small arrow" data-act="biome-next" aria-label="Next mountain">›</button>
+        </div>
         <button class="btn primary big" data-act="play">Play</button>
         <p class="best"></p>
         <p class="controls">${controls}</p>
@@ -82,6 +93,8 @@ export class Menu {
     this.pauseButton = q('.pause-btn');
     this.setMuted(muted);
     this.setMusic(music);
+    this.biomeIndex = Math.max(0, BIOMES.findIndex((b) => b.id === biome));
+    this.renderBiome();
 
     this.root.addEventListener('click', (e) => {
       const act = (e.target as HTMLElement).closest<HTMLElement>('[data-act]')?.dataset.act;
@@ -89,6 +102,7 @@ export class Menu {
       this.actions.click();
       if (act === 'mute') this.setMuted(this.actions.toggleMute());
       else if (act === 'music') this.setMusic(this.actions.toggleMusic());
+      else if (act === 'biome-prev' || act === 'biome-next') this.stepBiome(act === 'biome-next' ? 1 : -1);
       else if (act === 'play' || act === 'pause' || act === 'resume' || act === 'restart' || act === 'home') this.actions[act]();
     });
     // Keep presses on the overlay from also counting as a jump.
@@ -107,7 +121,10 @@ export class Menu {
     if (e.code === 'KeyM') this.setMuted(this.actions.toggleMute());
     else if (this.screen === null && back) this.actions.pause();
     else if (this.screen === 'pause' && back) this.actions.resume();
-    else if (this.screen === 'title' && confirm) this.actions.play();
+    else if (this.screen === 'title' && (e.code === 'ArrowLeft' || e.code === 'ArrowRight')) {
+      this.actions.click();
+      this.stepBiome(e.code === 'ArrowRight' ? 1 : -1);
+    } else if (this.screen === 'title' && confirm && isBiomeUnlocked(BIOMES[this.biomeIndex].id)) this.actions.play();
     else if (this.screen === 'over' && confirm && performance.now() - this.shownAt > OVER_KEY_DELAY) this.actions.play();
   }
 
@@ -117,6 +134,24 @@ export class Menu {
 
   private setMusic(on: boolean): void {
     for (const b of this.root.querySelectorAll<HTMLElement>('[data-act="music"]')) b.textContent = on ? 'Music: on' : 'Music: off';
+  }
+
+  private stepBiome(step: number): void {
+    this.biomeIndex = (this.biomeIndex + step + BIOMES.length) % BIOMES.length;
+    this.renderBiome();
+    this.actions.biome(BIOMES[this.biomeIndex].id);
+  }
+
+  /** Name of the picked biome; a locked one says how to unlock it, and can't be played. */
+  private renderBiome(): void {
+    const b = BIOMES[this.biomeIndex];
+    const locked = !isBiomeUnlocked(b.id);
+    const el = this.screens.title;
+    el.querySelector('.biome-name')!.textContent = b.name;
+    const lock = el.querySelector<HTMLElement>('.biome-lock')!;
+    lock.hidden = !locked;
+    lock.textContent = `Locked · ${b.lockHint}`;
+    el.querySelector<HTMLButtonElement>('[data-act="play"]')!.disabled = locked;
   }
 
   private show(screen: Screen | null): void {
@@ -129,6 +164,7 @@ export class Menu {
 
   showTitle(best: number): void {
     this.screens.title.querySelector('.best')!.textContent = best > 0 ? `Best ${fmt(best)}` : '';
+    this.renderBiome();
     this.show('title');
     this.pauseButton.hidden = true;
   }

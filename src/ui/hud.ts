@@ -65,7 +65,7 @@ export class Hud {
     this.score = add('0', { fontStyle: '600' });
     this.multiplier = add('', { fontStyle: '600', color: css(palette.beanie) }).setOrigin(0, 0.5);
     this.speed = add('', { fontStyle: '500' });
-    this.warning = add('', { fontStyle: '600', color: css(palette.scarf) });
+    this.warning = add('', { fontStyle: '600', color: css(palette.warning) });
     this.best = add('', { fontStyle: '500' }).setOrigin(1, 0.5);
     this.hint = add(touch ? 'Tap to jump  ·  hold to backflip' : 'Space / click to jump  ·  hold to backflip', { fontStyle: '600' }).setOrigin(0.5, 1);
     this.keys = add(touch ? '' : 'Esc  pause   ·   R  new run   ·   T  tune feel   ·   D  debug', { fontStyle: '500' }).setOrigin(1, 1).setAlpha(0.8);

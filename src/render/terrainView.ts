@@ -1,7 +1,8 @@
 import Phaser from 'phaser';
 import type { Terrain } from '../sim/terrain';
 import { hash01 } from '../sim/rng';
-import { palette } from './palette';
+import { palette, type PaletteKey } from './palette';
+import { currentBiome } from '../biomes';
 
 // Draws the slope in fixed-width chunks. Each chunk is drawn once when it
 // scrolls into view and recycled when it scrolls out (pooling was the
@@ -12,11 +13,11 @@ const SAMPLE_STEP = 8;
 /** How far below the surface the snow is filled, px. */
 const FILL_DEPTH = 3200;
 /** Layered strata below the surface, Tiny Wings / Alto style. */
-const BANDS: { offset: number; color: number }[] = [
-  { offset: 0, color: palette.snow },
-  { offset: 28, color: palette.snowBand1 },
-  { offset: 120, color: palette.snowBand2 },
-  { offset: 380, color: palette.snowBand3 },
+const BANDS: { offset: number; color: PaletteKey }[] = [
+  { offset: 0, color: 'snow' },
+  { offset: 28, color: 'snowBand1' },
+  { offset: 120, color: 'snowBand2' },
+  { offset: 380, color: 'snowBand3' },
 ];
 
 export class TerrainView {
@@ -69,7 +70,7 @@ export class TerrainView {
     for (const band of BANDS) {
       const pts = top.map((p) => new Phaser.Math.Vector2(p.x, p.y + band.offset));
       pts.push(new Phaser.Math.Vector2(x1, bottom), new Phaser.Math.Vector2(x0 - 2, bottom));
-      g.fillStyle(band.color, 1);
+      g.fillStyle(palette[band.color], 1);
       g.fillPoints(pts, true);
     }
     g.lineStyle(5, palette.snowRim, 1);
@@ -80,7 +81,7 @@ export class TerrainView {
   /** A few pines per chunk, rooted behind the snow line. Deterministic per chunk. */
   private drawTrees(g: Phaser.GameObjects.Graphics, index: number, x0: number): void {
     const salt = this.terrain.seed * 7919;
-    const count = Math.floor(hash01(salt + index * 31) * 4);
+    const count = Math.floor(hash01(salt + index * 31) * 4 * currentBiome().forest);
     for (let n = 0; n < count; n++) {
       const x = x0 + hash01(salt + index * 131 + n * 17) * CHUNK_W;
       const s = this.terrain.sample(x);

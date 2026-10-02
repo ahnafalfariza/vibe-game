@@ -4,6 +4,7 @@ import type { Terrain } from '../sim/terrain';
 import type { Obstacle } from '../sim/skier';
 import { hash01 } from '../sim/rng';
 import { palette } from './palette';
+import { currentBiome } from '../biomes';
 
 // Rocks, cabins, ice and coins, in the same flat style as the slope. Like the
 // terrain chunks, each is drawn once when it scrolls into view and its
@@ -28,6 +29,8 @@ export class ObstacleView {
   private readonly chips: Phaser.GameObjects.Particles.ParticleEmitter;
   private readonly splinters: Phaser.GameObjects.Particles.ParticleEmitter;
   private time = 0;
+  /** Cabin windows glow at night. */
+  private readonly night = currentBiome().night;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -206,6 +209,10 @@ export class ObstacleView {
     // A warm window and a door.
     const winX = c.x0 + w * 0.27;
     const winY = wallTop(winX) + (c.h - eave) * 0.22;
+    if (this.night) {
+      // Lamplight glowing out into the dark.
+      for (const [r, a] of [[80, 0.07], [58, 0.1], [40, 0.16]] as const) g.fillStyle(palette.windowGlow, a).fillCircle(winX, winY + 15, r);
+    }
     g.fillStyle(palette.logShade, 1).fillRect(winX - 22, winY - 4, 44, 40);
     g.fillStyle(palette.windowGlow, 1).fillRect(winX - 17, winY + 1, 34, 30);
     g.lineStyle(3, palette.logShade, 1).lineBetween(winX, winY + 1, winX, winY + 31).lineBetween(winX - 17, winY + 16, winX + 17, winY + 16);
