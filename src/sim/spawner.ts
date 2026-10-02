@@ -1,9 +1,11 @@
 import { Rng } from './rng';
 import { Skier, type Ground, type SkierEvent } from './skier';
 import { DIFFICULTY_RAMP, type Feature, type FeatureKind, type Terrain, type TerrainSample } from './terrain';
-import type { Tuning } from '../tuning';
+import { MOUNT_KINDS, MOUNTS, wildMount, type MountKind, type WildMount } from './mounts';
+import { PX_PER_METRE, type Tuning } from '../tuning';
 
-// Everything that sits on the slope: rocks, cabins, ice patches and coins.
+// Everything that sits on the slope: rocks, cabins, ice patches and coins,
+// and the mounts waiting to be ridden (kept apart in `mounts`: they move).
 //
 // Placement is per terrain feature, from a weighted spawn table (like the
 // terrain templates), and deterministic per seed. It has its own Rng so the
@@ -34,6 +36,8 @@ export interface Rock {
   x: number;
   y: number;
   r: number;
+  /** Smashed to bits by a polar bear: gone. */
+  broken?: boolean;
 }
 
 export interface Cabin {
@@ -80,24 +84,43 @@ export type SpawnEvent =
   | { type: 'coin'; x: number; y: number; index: number; size: number }
   | { type: 'cluster'; x: number; y: number; size: number };
 
-export type SpawnKind = 'rock' | 'cabin' | 'ice' | 'coinLine' | 'coinArc' | 'none';
+export type SpawnKind = 'rock' | 'cabin' | 'ice' | 'coinLine' | 'coinArc' | 'mount' | 'none';
 
 /**
  * What can go on each kind of feature: weight at difficulty 0 and at 1. A
- * second biome supplies its own table; mounts would add an animal kind.
+ * second biome supplies its own table. 'mount' only takes part once one is due
+ * (see MOUNT_GAP); which mount comes from MOUNT_TABLE.
  */
 export type SpawnTable = Record<FeatureKind, Partial<Record<SpawnKind, [easy: number, hard: number]>>>;
 
 export const ALPINE: SpawnTable = {
   start: {},
   // Cabins need a long, even stretch: cruises, and the runouts of drops and booters.
-  cruise: { cabin: [6, 6], rock: [2, 3], ice: [1, 1.5], coinLine: [1.5, 1], none: [1, 0.5] },
-  rollers: { rock: [3, 4], coinLine: [1.5, 1], coinArc: [1, 1], none: [2, 1] },
-  kicker: { rock: [2, 3], ice: [1, 1], coinArc: [3, 3], none: [1.5, 1] },
-  drop: { rock: [2, 3], cabin: [2, 2], coinArc: [2.5, 2.5], none: [1.5, 1] },
-  bowl: { rock: [1.5, 2], ice: [2, 2], coinLine: [1.5, 1.5], coinArc: [1.5, 1.5], none: [1.5, 1] },
-  booter: { rock: [2, 3], cabin: [1, 1], coinArc: [3, 3], none: [1.5, 1] },
+  cruise: { cabin: [6, 6], rock: [2, 3], ice: [1, 1.5], coinLine: [1.5, 1], mount: [10, 10], none: [1, 0.5] },
+  rollers: { rock: [3, 4], coinLine: [1.5, 1], coinArc: [1, 1], mount: [6, 6], none: [2, 1] },
+  kicker: { rock: [2, 3], ice: [1, 1], coinArc: [3, 3], mount: [4, 4], none: [1.5, 1] },
+  drop: { rock: [2, 3], cabin: [2, 2], coinArc: [2.5, 2.5], mount: [5, 5], none: [1.5, 1] },
+  bowl: { rock: [1.5, 2], ice: [2, 2], coinLine: [1.5, 1.5], coinArc: [1.5, 1.5], mount: [6, 6], none: [1.5, 1] },
+  booter: { rock: [2, 3], cabin: [1, 1], coinArc: [3, 3], mount: [4, 4], none: [1.5, 1] },
 };
+
+/** Which mount, once one is due: from how far down the mountain (px), and how common. */
+export const MOUNT_TABLE: Record<MountKind, { from: number; weight: number }> = {
+  penguin: { from: 250 * PX_PER_METRE, weight: 4 },
+  eagle: { from: 700 * PX_PER_METRE, weight: 2.5 },
+  snowmobile: { from: 1000 * PX_PER_METRE, weight: 2 },
+  bear: { from: 1400 * PX_PER_METRE, weight: 2 },
+};
+/** A kind not seen yet this run is this much likelier: everyone gets to meet each mount. */
+const NEW_MOUNT_BOOST = 4;
+/** Slope between one mount and the earliest the next may go, px (plus however long placing it takes). */
+const MOUNT_GAP = 21000;
+/** …or this fraction of it for a kind's first appearance, so each turns up near its `from`. */
+const NEW_MOUNT_GAP = 0.5;
+/** Clear snow between an obstacle and a mount, either way round, px. */
+const MOUNT_CLEAR = 900;
+/** Snow before a mount the idle rider must be on: to ride into it, or (eagle) to jump for it, px. */
+const MOUNT_RUNUP = { ground: 200, eagle: 400 };
 
 const OBSTACLES: ReadonlySet<SpawnKind> = new Set(['rock', 'cabin', 'ice']);
 
@@ -183,6 +206,8 @@ interface Ghost {
 export class Spawner implements Ground {
   /** Everything on the slope near the skier, roughly in x order. */
   readonly entities: Entity[] = [];
+  /** Mounts waiting to be ridden (sim/mounts.ts moves them and boards them). */
+  readonly mounts: WildMount[] = [];
   /** Cabins and ice: the bits of entities that change the ground. */
   private readonly surfaces: (Cabin | Ice)[] = [];
   private readonly flights: Flight[] = [];
@@ -194,6 +219,10 @@ export class Spawner implements Ground {
   /** Right edge of the last obstacle's keep-clear zone, px. */
   private lastObstacleEnd = -Infinity;
   private lastCoinEnd = -Infinity;
+  /** Where the last mount was put, px. */
+  private lastMountX = -Infinity;
+  /** Kinds put on the slope so far. */
+  private readonly metMounts = new Set<MountKind>();
 
   constructor(
     private readonly terrain: Terrain,
@@ -263,12 +292,20 @@ export class Spawner implements Ground {
     keep(this.entities);
     keep(this.surfaces);
     keep(this.flights);
+    keep(this.mounts);
   }
 
   /** Put something on the slope (the spawner does; so can tests). */
   add(e: Entity): void {
     this.entities.push(e);
     if (e.kind === 'cabin' || e.kind === 'ice') this.surfaces.push(e);
+  }
+
+  /** Put a mount on the slope at `x` (the spawner does; so can tests and ?mount= tours). */
+  addMount(kind: MountKind, x: number): WildMount {
+    const m = wildMount(kind, x, this);
+    this.mounts.push(m);
+    return m;
   }
 
   /** The cabin whose roof spans `x` is smashed (someone ran into its wall). */
@@ -281,7 +318,9 @@ export class Spawner implements Ground {
     for (const e of this.entities) {
       if (e.x0 > skier.x + 120 || e.x1 < skier.x - 120) continue;
       if (e.kind === 'rock') {
-        if (skier.vulnerable && skier.touches(e.x, e.y, e.r * ROCK_HIT)) skier.hit('rock', events as SkierEvent[], e.x);
+        if (!e.broken && skier.vulnerable && skier.touches(e.x, e.y, e.r * ROCK_HIT) && skier.hit('rock', events as SkierEvent[], e.x) === 'smash') {
+          e.broken = true;
+        }
       } else if (e.kind === 'coin' && !e.taken && skier.touches(e.x, e.y, COIN_PICKUP)) {
         e.taken = true;
         const c = e.cluster;
@@ -368,17 +407,27 @@ export class Spawner implements Ground {
     if (entries.length === 0) return;
     const d = Math.min(1, Math.max(0, f.x0 / DIFFICULTY_RAMP));
     const density = this.obstacles ? this.tuning.obstacleDensity : 0;
+    // Mounts come with the obstacles, and only once one is due.
+    const mountDue = this.obstacles && MOUNT_KINDS.some((k) => f.x1 > this.mountDue(k));
+    const mounts = mountDue ? this.tuning.mountDensity : 0;
     const weights = {} as Record<SpawnKind, number>;
     for (const [kind, [easy, hard]] of entries) {
-      const w = (easy + (hard - easy) * d) * (OBSTACLES.has(kind) ? density : 1);
+      const w = (easy + (hard - easy) * d) * (OBSTACLES.has(kind) ? density : kind === 'mount' ? mounts : 1);
       if (w > 0) weights[kind] = w;
     }
     if (Object.keys(weights).length === 0) return;
     const rolls = Math.max(1, Math.round((f.x1 - f.x0) / ROLL_LENGTH));
     const picks = Array.from({ length: rolls }, () => this.rng.weighted(weights));
-    // Obstacles claim their spots first; coins fill in around them.
-    picks.sort((p, q) => Number(!OBSTACLES.has(p)) - Number(!OBSTACLES.has(q)));
+    // Obstacles claim their spots first, then mounts; coins fill in around them.
+    const order = (k: SpawnKind) => (OBSTACLES.has(k) ? 0 : k === 'mount' ? 1 : 2);
+    picks.sort((p, q) => order(p) - order(q));
     for (const kind of picks) this.place(kind, f);
+  }
+
+  /** The earliest x the next `kind` may go. A kind's first appearance comes sooner. */
+  private mountDue(kind: MountKind): number {
+    const gap = this.metMounts.has(kind) ? MOUNT_GAP : MOUNT_GAP * NEW_MOUNT_GAP;
+    return Math.max(MOUNT_TABLE[kind].from, this.lastMountX + gap);
   }
 
   /** A random x in [f.x0, f.x1) where `ok(x)` holds, or null if there's none. */
@@ -438,6 +487,22 @@ export class Spawner implements Ground {
         this.addCoins(range(a, a + len + 1, COIN_SPACING).map((cx) => [cx, this.terrain.height(cx) - COIN_LIFT]));
         return;
       }
+      case 'mount': {
+        const weights = {} as Record<MountKind, number>;
+        for (const k of MOUNT_KINDS) if (f.x1 > this.mountDue(k)) weights[k] = MOUNT_TABLE[k].weight * (this.metMounts.has(k) ? 1 : NEW_MOUNT_BOOST);
+        if (Object.keys(weights).length === 0) return;
+        const kind = r.weighted(weights);
+        const due = this.mountDue(kind);
+        const [before, after] = kind === 'eagle' ? [MOUNT_RUNUP.eagle, 100] : [MOUNT_RUNUP.ground, MOUNTS[kind].range + 150];
+        const x = this.spot(f, (x) => x >= due && this.mountFits(x - before, x + after));
+        if (x === null) return;
+        const m = this.addMount(kind, x);
+        this.metMounts.add(kind);
+        this.lastMountX = x;
+        // Obstacles keep their distance after it too: board, then see what's coming.
+        this.lastObstacleEnd = Math.max(this.lastObstacleEnd, m.x1 + MOUNT_CLEAR - OBSTACLE_GAP);
+        return;
+      }
       case 'coinArc': {
         // Follow a longer flight from a takeoff on this feature: the idle
         // ghost's (ride the jump to get them) or a jump at the lip (a higher
@@ -491,6 +556,23 @@ export class Spawner implements Ground {
   private coinsFit(a: number, b: number): boolean {
     if (a - this.lastCoinEnd < 300) return false;
     for (const e of this.entities) if (e.kind !== 'coin' && e.kind !== 'ice' && a < e.x1 + 200 && b > e.x0 - 200) return false;
+    for (const m of this.mounts) if (a < m.x1 + 200 && b > m.x0 - 200) return false;
+    return true;
+  }
+
+  /**
+   * Can a mount's zone [a, b] go here? Clear of obstacles and coins, and an
+   * idle rider is on the snow all along it (nothing it could fly over unseen),
+   * on no steep climb: a ground mount is in the way, an eagle in reach of a jump.
+   */
+  private mountFits(a: number, b: number): boolean {
+    if (a - this.lastObstacleEnd < MOUNT_CLEAR || this.coinsOverlap(a - 150, b + 150)) return false;
+    // Little hops over rollers are fine: you still bump into it.
+    for (const f of this.flights) if (f.ghost.name === 'idle' && f.air >= FORCED_AIR && a < f.x1 && b > f.x0) return false;
+    for (let x = a; x <= b; x += 50) {
+      const dy = this.terrain.sample(x).dy;
+      if (dy < -0.5 || dy > 1) return false;
+    }
     return true;
   }
 

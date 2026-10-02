@@ -105,9 +105,10 @@ describe('Fairness', () => {
 
   it('never makes a rider who just rides come down on a rock or fly into a cabin wall', () => {
     // A rider who moves exactly like the spawner's idle ghost: never knocked
-    // down, no cluster boosts, ice that isn't slick. Riding into things on the
-    // snow is fine (they were in plain view); landing on them is not.
-    const tuning = createTuning({ coinClusterBoost: 0, iceFriction: 0.03, iceDrag: 1 });
+    // down, no cluster boosts, ice that isn't slick, no mounts to ride. Riding
+    // into things on the snow is fine (they were in plain view); landing on
+    // them is not.
+    const tuning = createTuning({ coinClusterBoost: 0, iceFriction: 0.03, iceDrag: 1, mountDensity: 0 });
     for (let seed = 1; seed <= 8; seed++) {
       const run = new Run(seed, tuning, { avalanche: false, obstacles: true });
       const sk = run.skier;

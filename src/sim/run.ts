@@ -1,7 +1,8 @@
 import { Terrain } from './terrain';
 import { Skier, type SkierEvent, type SkierInput } from './skier';
 import { Spawner, type SpawnEvent, type SpawnTable } from './spawner';
-import { Score } from './score';
+import { Mounts, type MountEvent, type MountKind } from './mounts';
+import { MOUNT_POINTS, SMASH_POINTS, Score } from './score';
 import { PX_PER_METRE, type Tuning } from '../tuning';
 
 /** Fixed simulation step. Rendering interpolates between steps. */
@@ -21,30 +22,63 @@ export interface RunStats {
   coins: number;
   /** Clusters collected in full. */
   clusters: number;
+  /** Times each mount was boarded (a start-of-run mount doesn't count). */
+  rides: Record<MountKind, number>;
+  /** Metres travelled on each mount (for the eagle: carried by one). */
+  ridden: Record<MountKind, number>;
+  /** Rocks and cabins a polar bear smashed. */
+  smashes: number;
+  /** Seconds carried by eagles. */
+  eagleTime: number;
+  /** Mounts knocked off by taking a hit for you. */
+  shieldsLost: number;
 }
 
 export interface RunOptions {
   /** Without the avalanche the run never ends (the title-screen backdrop). Default on. */
   avalanche?: boolean;
-  /** Rocks, cabins and ice. Default: only with the avalanche (the demo run has no player to dodge them). */
+  /** Rocks, cabins, ice and mounts. Default: only with the avalanche (the demo run has no player to dodge them). */
   obstacles?: boolean;
+  /** Start the run already riding this (rank perks, the shop, ?mount=). */
+  startMount?: MountKind;
   /** What goes on the slope (a biome's spawn table). Default: the alpine one. */
   table?: SpawnTable;
 }
 
-/** Trick points awarded for a landing (pushed right after its 'land' event). */
-export type RunEvent = SkierEvent | SpawnEvent | { type: 'award'; x: number; y: number; points: number; multiplier: number };
+/** Points awarded for a landing, mount or smash (pushed right after its event). */
+export type RunEvent =
+  | SkierEvent
+  | SpawnEvent
+  | MountEvent
+  | { type: 'award'; x: number; y: number; points: number; multiplier: number };
 
-/** One run down the mountain: terrain + skier + avalanche + bookkeeping. No rendering. */
+const perKind = (): Record<MountKind, number> => ({ penguin: 0, eagle: 0, snowmobile: 0, bear: 0 });
+
+/** One run down the mountain: terrain + skier + mounts + avalanche + bookkeeping. No rendering. */
 export class Run {
   readonly terrain: Terrain;
-  /** Rocks, cabins, ice and coins; also the ground the skier rides on. */
+  /** Rocks, cabins, ice, coins and waiting mounts; also the ground the skier rides on. */
   readonly spawner: Spawner;
   readonly skier: Skier;
+  /** What the skier is riding. */
+  readonly mounts: Mounts;
   readonly startX = 0;
   readonly avalanche: boolean;
   time = 0;
-  readonly stats: RunStats = { flips: 0, cleanLandings: 0, crashes: 0, bestAirTime: 0, topSpeed: 0, coins: 0, clusters: 0 };
+  readonly stats: RunStats = {
+    flips: 0,
+    cleanLandings: 0,
+    crashes: 0,
+    bestAirTime: 0,
+    topSpeed: 0,
+    coins: 0,
+    clusters: 0,
+    rides: perKind(),
+    ridden: perKind(),
+    smashes: 0,
+    eagleTime: 0,
+    shieldsLost: 0,
+  };
   readonly scoring = new Score();
   /** Front edge of the avalanche, world x. */
   avalancheX: number;
@@ -54,12 +88,15 @@ export class Run {
   constructor(
     readonly seed: number,
     readonly tuning: Tuning,
-    { avalanche = true, obstacles = avalanche, table }: RunOptions = {},
+    { avalanche = true, obstacles = avalanche, startMount, table }: RunOptions = {},
   ) {
     this.avalanche = avalanche;
     this.terrain = new Terrain(seed, tuning);
     this.spawner = new Spawner(this.terrain, tuning, seed, obstacles, this.startX, table);
-    this.skier = new Skier(this.spawner, tuning, this.startX);
+    this.mounts = new Mounts(tuning);
+    this.skier = new Skier(this.spawner, this.mounts.tuning, this.startX);
+    this.skier.guard = (cause) => this.mounts.absorb(cause, this.skier);
+    if (startMount) this.mounts.board(startMount, this.skier, []);
     this.avalancheX = this.startX - tuning.avalancheStartGap;
   }
 
@@ -92,15 +129,27 @@ export class Run {
   private stepSkier(input: SkierInput, events: RunEvent[]): void {
     const firstNew = events.length;
     const sk = this.skier;
+    const fromX = sk.x;
     this.terrain.ensure(sk.x + GENERATE_AHEAD);
     this.spawner.update(sk.x);
     sk.step(SIM_DT, input, events as SkierEvent[]);
     this.spawner.collide(sk, events as (SkierEvent | SpawnEvent)[]);
+    this.mounts.step(SIM_DT, sk, this.spawner.mounts, this.spawner, events as MountEvent[]);
     this.terrain.prune(sk.x - KEEP_BEHIND);
     this.spawner.prune(sk.x - KEEP_BEHIND);
 
     const st = this.stats;
     st.topSpeed = Math.max(st.topSpeed, sk.velocity);
+    const metres = (sk.x - fromX) / PX_PER_METRE;
+    for (const kind of this.mounts.stack) st.ridden[kind] += metres;
+    if (sk.carried) {
+      st.ridden.eagle += metres;
+      st.eagleTime += SIM_DT;
+    }
+    const award = (i: number, x: number, y: number, points: number, multiplier: number) => {
+      if (points > 0) events.splice(i + 1, 0, { type: 'award', x, y, points, multiplier });
+      return points > 0 ? i + 1 : i;
+    };
     for (let i = firstNew; i < events.length; i++) {
       const e = events[i];
       if (e.type === 'coin') st.coins++;
@@ -120,8 +169,19 @@ export class Run {
           if (e.quality === 'clean') st.cleanLandings++;
         }
         const multiplier = e.quality === 'clean' ? this.scoring.multiplier : 1;
-        const points = this.scoring.land(e);
-        if (points > 0) events.splice(++i, 0, { type: 'award', x: e.x, y: e.y, points, multiplier });
+        i = award(i, e.x, e.y, this.scoring.land(e), multiplier);
+      } else if (e.type === 'mount') {
+        st.rides[e.kind]++;
+        const multiplier = this.scoring.multiplier;
+        i = award(i, e.x, e.y, this.scoring.bonus(MOUNT_POINTS[e.kind]), multiplier);
+      } else if (e.type === 'smash') {
+        st.smashes++;
+        const multiplier = this.scoring.multiplier;
+        i = award(i, e.x, e.y, this.scoring.bonus(SMASH_POINTS), multiplier);
+      } else if (e.type === 'dismount' && (e.reason === 'rock' || e.reason === 'cabin' || e.reason === 'landing')) {
+        // Losing a shield stings like a sloppy landing: the streak is gone.
+        st.shieldsLost++;
+        this.scoring.multiplier = 1;
       }
     }
   }
@@ -134,3 +194,4 @@ export class Run {
     if (this.avalancheX >= this.skier.x) this.caught = true;
   }
 }
+

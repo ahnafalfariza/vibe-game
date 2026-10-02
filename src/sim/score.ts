@@ -1,4 +1,5 @@
 import type { SkierEvent } from './skier';
+import type { MountKind } from './mounts';
 
 // Trick scoring. Distance gives 1 point per metre (see Run.score); landings
 // give trick points on top. Clean flips raise the multiplier, so a streak of
@@ -11,6 +12,10 @@ type Landing = Extract<SkierEvent, { type: 'land' }>;
 export const BIG_AIR_TIME = 1.1;
 const BIG_AIR_POINTS = 50;
 const MAX_MULTIPLIER = 10;
+/** Points for climbing aboard each mount (× the multiplier). */
+export const MOUNT_POINTS: Record<MountKind, number> = { penguin: 100, eagle: 150, snowmobile: 150, bear: 200 };
+/** Points for a polar bear smashing a rock or cabin (× the multiplier). */
+export const SMASH_POINTS = 150;
 
 export class Score {
   tricks = 0;
@@ -33,6 +38,13 @@ export class Score {
     if (e.airTime >= BIG_AIR_TIME) points += BIG_AIR_POINTS;
     points *= this.multiplier;
     this.multiplier = Math.min(MAX_MULTIPLIER, this.multiplier + e.flips);
+    this.tricks += points;
+    return points;
+  }
+
+  /** A bonus (mounting, smashing), × the multiplier. Returns the points awarded. */
+  bonus(points: number): number {
+    points *= this.multiplier;
     this.tricks += points;
     return points;
   }
