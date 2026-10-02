@@ -25,6 +25,9 @@ await page.goto(`http://localhost:4175/?seed=${process.env.SEED ?? 7}${process.e
 for (let i = 0; i < 40 && !(await page.evaluate(() => !!window.__game?.scene?.getScene('play')?.run)); i++) {
   await page.clock.runFor(100);
 }
+// Start a run from the title screen.
+await page.keyboard.press('Enter');
+await page.clock.runFor(100);
 const state = () =>
   page.evaluate(() => {
     const s = window.__game.scene.getScene('play').run.skier;

@@ -46,6 +46,14 @@ export interface Tuning {
   jumpBuffer: number;
   /** Average downhill gradient of the mountain (dy/dx). */
   mountainSlope: number;
+  /** How far behind the skier the avalanche starts, px. */
+  avalancheStartGap: number;
+  /** Avalanche speed at the start of a run, horizontal px/s. */
+  avalancheSpeed: number;
+  /** How quickly the avalanche speeds up, px/s². */
+  avalancheAccel: number;
+  /** The avalanche is never further behind than this, px — you can't escape it for good. */
+  avalancheMaxGap: number;
 }
 
 export const DEFAULT_TUNING: Readonly<Tuning> = Object.freeze({
@@ -71,6 +79,10 @@ export const DEFAULT_TUNING: Readonly<Tuning> = Object.freeze({
   coyoteTime: 0.08,
   jumpBuffer: 0.1,
   mountainSlope: 0.3,
+  avalancheStartGap: 350,
+  avalancheSpeed: 500,
+  avalancheAccel: 6,
+  avalancheMaxGap: 2400,
 });
 
 export function createTuning(overrides: Partial<Tuning> = {}): Tuning {

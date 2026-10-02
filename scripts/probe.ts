@@ -2,7 +2,7 @@
 // Usage: bun run probe
 import { Run, SIM_DT } from '../src/sim/run';
 import { createTuning } from '../src/tuning';
-import type { SkierEvent } from '../src/sim/skier';
+import type { RunEvent } from '../src/sim/run';
 
 type Bot = (run: Run, t: number) => { held: boolean; pressed: boolean };
 
@@ -39,8 +39,9 @@ function lipJumper(): Bot {
 }
 
 function simulate(name: string, bot: Bot, seed: number, seconds: number) {
-  const run = new Run(seed, createTuning());
-  const events: SkierEvent[] = [];
+  // The avalanche is off here so every bot gets the full time; survive() tests it.
+  const run = new Run(seed, createTuning(), false);
+  const events: RunEvent[] = [];
   let prevHeld = false;
   let speedSum = 0;
   let steps = 0;
@@ -83,8 +84,26 @@ function simulate(name: string, bot: Bot, seed: number, seconds: number) {
   }
 }
 
+/** Seconds until the avalanche catches the bot (capped at 5 minutes). */
+function survive(bot: Bot, seed: number): string {
+  const run = new Run(seed, createTuning());
+  let prevHeld = false;
+  let minGap = Infinity;
+  for (let t = 0; t < 300 && !run.caught; t += SIM_DT) {
+    const input = bot(run, t);
+    input.pressed = input.pressed || (input.held && !prevHeld);
+    prevHeld = input.held;
+    run.step(input, []);
+    if (t < 10) minGap = Math.min(minGap, run.avalancheGap());
+  }
+  return Math.round(run.time) + (minGap < 150 ? ` (gap ${minGap.toFixed(0)}px in first 10s!)` : '');
+}
+
 for (const seed of [1, 2, 3]) {
   simulate('idle', idle, seed, 60);
   simulate('flipper', flipper(), seed, 60);
   simulate('lipjump', lipJumper(), seed, 60);
+}
+for (const seed of [1, 2, 3, 4, 5]) {
+  console.log(`avalanche seed=${seed} survived: idle ${survive(idle, seed)}s  flipper ${survive(flipper(), seed)}s  lipjump ${survive(lipJumper(), seed)}s`);
 }

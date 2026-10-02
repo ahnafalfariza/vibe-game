@@ -24,3 +24,187 @@ body {
   max-height: calc(100% - 24px);
   z-index: 10;
 }
+
+/* ---- Menus (src/ui/menu.ts) ---- */
+
+#overlay {
+  --ink: #243049;
+  --orange: #ff7a45;
+  --orange-dark: #e0602f;
+  --yellow: #ffc93c;
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  overflow-y: auto;
+  padding: max(12px, env(safe-area-inset-top)) 16px max(12px, env(safe-area-inset-bottom));
+  box-sizing: border-box;
+  pointer-events: none;
+  font-family: Fredoka, 'Trebuchet MS', system-ui, sans-serif;
+  color: #fff;
+  text-align: center;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: background-color 0.25s;
+}
+
+#overlay.open {
+  pointer-events: auto;
+  background: rgb(36 48 73 / 0.45);
+}
+
+#overlay [hidden] {
+  display: none !important;
+}
+
+.screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(6px, 1.6vh, 14px);
+  animation: pop-in 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes pop-in {
+  from {
+    transform: scale(0.85);
+    opacity: 0;
+  }
+}
+
+.screen h1,
+.screen h2,
+.screen .score {
+  margin: 0;
+  font-weight: 600;
+  line-height: 1;
+  text-shadow:
+    0 0.06em 0 var(--ink),
+    0 0 0.12em var(--ink),
+    0.04em 0.04em 0 var(--ink),
+    -0.04em 0.04em 0 var(--ink),
+    0.04em -0.04em 0 var(--ink),
+    -0.04em -0.04em 0 var(--ink);
+}
+
+.screen h1 {
+  font-size: clamp(40px, 12vh, 96px);
+  transform: rotate(-3deg);
+}
+
+.screen h2 {
+  font-size: clamp(28px, 7vh, 56px);
+}
+
+.screen .score {
+  font-size: clamp(44px, 14vh, 110px);
+  color: var(--yellow);
+}
+
+.screen p {
+  margin: 0;
+  font-weight: 500;
+  font-size: clamp(15px, 3vh, 22px);
+  text-shadow: 0 2px 0 var(--ink);
+}
+
+.screen .tagline {
+  margin-bottom: clamp(4px, 2vh, 18px);
+}
+
+.screen .controls {
+  opacity: 0.85;
+}
+
+.screen .new-best {
+  color: var(--yellow);
+  font-weight: 600;
+  animation: pulse 0.8s ease-in-out infinite alternate;
+}
+
+@keyframes pulse {
+  to {
+    transform: scale(1.12);
+  }
+}
+
+.btn {
+  min-width: 200px;
+  padding: 0.45em 1.4em;
+  border: 3px solid var(--ink);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--ink);
+  font: 600 clamp(18px, 3.6vh, 26px) / 1.2 Fredoka, 'Trebuchet MS', system-ui, sans-serif;
+  box-shadow: 0 4px 0 var(--ink);
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.btn:hover {
+  filter: brightness(1.06);
+}
+
+.btn:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 var(--ink);
+}
+
+.btn:focus-visible,
+.pause-btn:focus-visible {
+  outline: 3px solid var(--yellow);
+  outline-offset: 3px;
+}
+
+.btn.primary {
+  background: var(--orange);
+  color: #fff;
+  text-shadow: 0 2px 0 var(--orange-dark);
+}
+
+.btn.big {
+  min-width: 240px;
+  font-size: clamp(24px, 5.5vh, 38px);
+}
+
+.btn.small {
+  min-width: 0;
+  font-size: clamp(14px, 2.6vh, 18px);
+  box-shadow: 0 3px 0 var(--ink);
+}
+
+.pause-btn {
+  position: fixed;
+  top: max(12px, env(safe-area-inset-top));
+  right: max(12px, env(safe-area-inset-right));
+  width: clamp(40px, 7.5vh, 60px);
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18%;
+  border: 3px solid var(--ink);
+  border-radius: 50%;
+  background: rgb(255 255 255 / 0.85);
+  box-shadow: 0 3px 0 var(--ink);
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.pause-btn span {
+  width: 14%;
+  height: 40%;
+  border-radius: 2px;
+  background: var(--ink);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .screen,
+  .screen .new-best {
+    animation: none;
+  }
+}

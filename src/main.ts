@@ -5,6 +5,8 @@ import './style.css';
 import { PlayScene, type GameContext } from './scenes/PlayScene';
 import { createTuning } from './tuning';
 import { Tuner, loadSavedTuning } from './ui/tuner';
+import { Menu } from './ui/menu';
+import { Sfx } from './audio';
 
 async function main(): Promise<void> {
   // Make sure the UI font is ready before Phaser rasterises any text.
@@ -15,12 +17,29 @@ async function main(): Promise<void> {
   const tuning = createTuning(loadSavedTuning());
 
   let game: Phaser.Game | null = null;
+  const scene = () => game?.scene.getScene('play') as PlayScene | null | undefined;
+  const sfx = new Sfx();
+  const touch = matchMedia('(pointer: coarse)').matches;
   const ctx: GameContext = {
     tuning,
-    tuner: new Tuner(tuning, { newRun: () => (game?.scene.getScene('play') as PlayScene | null)?.newRun() }),
+    tuner: new Tuner(tuning, { newRun: () => scene()?.newRun() }),
+    sfx,
+    menu: new Menu(
+      {
+        play: () => scene()?.newRun(true),
+        pause: () => scene()?.pause(),
+        resume: () => scene()?.resume(),
+        restart: () => scene()?.newRun(true),
+        home: () => scene()?.newRun(false),
+        toggleMute: () => sfx.toggleMute(),
+        click: () => sfx.click(),
+      },
+      touch,
+      sfx.muted,
+    ),
     fixedSeed: seedParam !== null && Number.isFinite(Number(seedParam)) ? Number(seedParam) >>> 0 : null,
     debug: params.has('debug'),
-    touch: matchMedia('(pointer: coarse)').matches,
+    touch,
   };
 
   // Render at device resolution (capped at 2x) and scale the canvas down with
