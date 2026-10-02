@@ -3,6 +3,7 @@
 import { Run, SIM_DT } from '../src/sim/run';
 import { createTuning } from '../src/tuning';
 import type { RunEvent } from '../src/sim/run';
+import type { Cluster } from '../src/sim/spawner';
 
 type Bot = (run: Run, t: number) => { held: boolean; pressed: boolean };
 
@@ -38,9 +39,35 @@ function lipJumper(): Bot {
   };
 }
 
+/** Seconds of warning the hopper takes before jumping a rock or cabin it sees coming. */
+const HOP_LEAD = 0.3;
+
+// The lip jumper, plus: hops (no flip) over rocks and onto cabins it sees coming.
+function hopper(): Bot {
+  const lip = lipJumper();
+  return (run, t) => {
+    const input = lip(run, t);
+    const s = run.skier;
+    if (s.mode !== 'ground' || input.pressed) return input;
+    for (const e of run.spawner.entities) {
+      if (e.kind !== 'rock' && (e.kind !== 'cabin' || e.broken)) continue;
+      const d = e.x0 - s.x;
+      if (d > 0 && d < s.velocity * HOP_LEAD) return { held: false, pressed: true };
+    }
+    return input;
+  };
+}
+
+const BOTS: [string, () => Bot][] = [
+  ['idle', () => idle],
+  ['flipper', flipper],
+  ['lipjump', lipJumper],
+  ['hopper', hopper],
+];
+
 function simulate(name: string, bot: Bot, seed: number, seconds: number) {
   // The avalanche is off here so every bot gets the full time; survive() tests it.
-  const run = new Run(seed, createTuning(), false);
+  const run = new Run(seed, createTuning(), false, true);
   const events: RunEvent[] = [];
   let prevHeld = false;
   let speedSum = 0;
@@ -48,19 +75,27 @@ function simulate(name: string, bot: Bot, seed: number, seconds: number) {
   const takeoffs: number[] = [];
   const kinds = new Map<string, number>();
   const air = new Map<string, number[]>();
+  const hits = { rock: 0, cabin: 0, airborne: 0 };
+  const clusters = new Set<Cluster>();
   let lastKind = '?';
   for (let t = 0; t < seconds; t += SIM_DT) {
     const input = bot(run, t);
     input.pressed = input.pressed || (input.held && !prevHeld);
     prevHeld = input.held;
     events.length = 0;
+    const wasAir = run.skier.mode === 'air';
     run.step(input, events);
     speedSum += run.skier.velocity;
     steps++;
+    for (const e of run.spawner.entities) if (e.kind === 'coin') clusters.add(e.cluster);
     for (const e of events) {
       if (e.type === 'takeoff' || e.type === 'jump') {
         takeoffs.push(t);
         lastKind = run.terrain.featureAt(run.skier.x)?.kind ?? '?';
+      }
+      if (e.type === 'hit' && e.crashed) {
+        hits[e.obstacle]++;
+        if (wasAir) hits.airborne++;
       }
       if (e.type === 'land') {
         const k = `${e.quality}${e.flips ? `+${e.flips}flip` : ''}`;
@@ -74,14 +109,20 @@ function simulate(name: string, bot: Bot, seed: number, seconds: number) {
     }
   }
   const st = run.stats;
+  const passed = [...clusters].filter((c) => c.x1 < run.skier.x).length;
   console.log(
     `${name.padEnd(8)} seed=${seed} dist=${(run.distancePx() / 40).toFixed(0)}m avgSpeed=${(speedSum / steps).toFixed(0)} top=${st.topSpeed.toFixed(0)} ` +
       `bestAir=${st.bestAirTime.toFixed(2)}s takeoffs=${takeoffs.length} landings=${JSON.stringify(Object.fromEntries(kinds))}`,
   );
-  if (name !== 'flipper') {
+  console.log(
+    `   hits rock=${hits.rock} cabin=${hits.cabin} (from the air ${hits.airborne})  coins=${st.coins}  clusters ${st.clusters}/${passed}` +
+      (passed ? ` (${Math.round((100 * st.clusters) / passed)}%)` : ''),
+  );
+  if (name === 'idle' || name === 'lipjump') {
     const rows = [...air].map(([k, v]) => `${k}:n=${v.length},avg=${(v.reduce((a, b) => a + b, 0) / v.length).toFixed(2)},max=${Math.max(...v).toFixed(2)}`);
     console.log('   air>0.25s by feature: ' + rows.join('  '));
   }
+  return { hits: hits.rock + hits.cabin, coins: st.coins, clusters: st.clusters, passed };
 }
 
 /** Seconds until the avalanche catches the bot (capped at 5 minutes). */
@@ -99,11 +140,26 @@ function survive(bot: Bot, seed: number): string {
   return Math.round(run.time) + (minGap < 150 ? ` (gap ${minGap.toFixed(0)}px in first 10s!)` : '');
 }
 
+const totals = new Map<string, { hits: number; coins: number; clusters: number; passed: number }>();
 for (const seed of [1, 2, 3]) {
-  simulate('idle', idle, seed, 60);
-  simulate('flipper', flipper(), seed, 60);
-  simulate('lipjump', lipJumper(), seed, 60);
+  for (const [name, make] of BOTS) {
+    const r = simulate(name, make(), seed, 60);
+    const t = totals.get(name) ?? { hits: 0, coins: 0, clusters: 0, passed: 0 };
+    for (const k of Object.keys(r) as (keyof typeof r)[]) t[k] += r[k];
+    totals.set(name, t);
+  }
 }
+console.log('per bot over 3 × 60 s:');
+for (const [name, t] of totals) {
+  console.log(`   ${name.padEnd(8)} obstacle crashes ${t.hits}  coins ${t.coins}  full clusters ${t.clusters}/${t.passed} (${Math.round((100 * t.clusters) / Math.max(1, t.passed))}%)`);
+}
+const survival = new Map<string, number[]>();
 for (const seed of [1, 2, 3, 4, 5]) {
-  console.log(`avalanche seed=${seed} survived: idle ${survive(idle, seed)}s  flipper ${survive(flipper(), seed)}s  lipjump ${survive(lipJumper(), seed)}s`);
+  const row = BOTS.map(([name, make]) => {
+    const s = survive(make(), seed);
+    survival.set(name, [...(survival.get(name) ?? []), parseInt(s)]);
+    return `${name} ${s}s`;
+  });
+  console.log(`avalanche seed=${seed} survived: ${row.join('  ')}`);
 }
+console.log('avalanche mean survival: ' + [...survival].map(([n, v]) => `${n} ${(v.reduce((a, b) => a + b, 0) / v.length).toFixed(0)}s`).join('  '));
