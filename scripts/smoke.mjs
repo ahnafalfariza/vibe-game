@@ -36,6 +36,18 @@ try {
     await page.waitForFunction(() => window.__game?.scene?.getScene('play')?.run, null, { timeout: 15000 });
     await page.waitForTimeout(1000);
     await page.screenshot({ path: `${outDir}/${name}-0-title.png` });
+    // Biome picker: the demo run behind the title switches right away, and the choice is remembered.
+    await page.click('#overlay [data-act="biome-next"]');
+    await page.waitForTimeout(800);
+    const picked = await page.evaluate(() => ({
+      biome: window.__game.scene.getScene('play').ctx.biome,
+      saved: localStorage.getItem('yeti-set-go.biome'),
+      cameras: window.__game.scene.getScene('play').cameras.cameras.length,
+    }));
+    await page.screenshot({ path: `${outDir}/${name}-0b-biome.png` });
+    if (picked.biome === 'alpine' || picked.saved !== picked.biome || picked.cameras !== 3) errors.push(`[${name}] bad biome pick ${JSON.stringify(picked)}`);
+    await page.click('#overlay [data-act="biome-prev"]');
+    await page.waitForTimeout(500);
     // Title screen → play.
     await page.click('#overlay [data-act="play"]');
     await page.waitForFunction(() => window.__game.scene.getScene('play').state === 'playing', null, { timeout: 5000 });

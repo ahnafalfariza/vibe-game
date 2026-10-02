@@ -1,6 +1,8 @@
 // Visual tour: drives the game on a faked clock (so slow headless rendering
 // doesn't matter) and screenshots key moments: a flip, a landing, big air.
 // Usage: bun run build && node scripts/tour.mjs
+// Env: PORT, VIEW=844x390x2 (viewport x DPR), SEED, OBSTACLE_SEED, DEBUG,
+// BIOME=twilight (screenshots then go to screenshots/tour-twilight-*.png).
 import { chromium } from 'playwright';
 import { spawn } from 'node:child_process';
 import { mkdirSync, existsSync } from 'node:fs';
@@ -14,6 +16,9 @@ const browser = await chromium.launch({
   args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'],
 });
 const [w, h, dpr] = (process.env.VIEW ?? '1280x720x1').split('x').map(Number);
+const biome = process.env.BIOME;
+const extra = (process.env.DEBUG ? '&debug' : '') + (biome ? `&biome=${biome}` : '');
+const prefix = `screenshots/tour${biome ? `-${biome}` : ''}`;
 const page = await browser.newPage({ viewport: { width: w, height: h }, deviceScaleFactor: dpr });
 const errors = [];
 page.on('pageerror', (e) => errors.push(e.message));
@@ -21,11 +26,13 @@ page.on('pageerror', (e) => errors.push(e.message));
 // each (software-rendered) frame takes for real.
 await page.clock.install({ time: 0 });
 await page.clock.pauseAt(1000);
-await page.goto(`http://localhost:${port}/?seed=${process.env.SEED ?? 7}${process.env.DEBUG ? '&debug' : ''}`);
+await page.goto(`http://localhost:${port}/?seed=${process.env.SEED ?? 7}${extra}`);
 // Let fonts/boot finish on the fake clock.
 for (let i = 0; i < 40 && !(await page.evaluate(() => !!window.__game?.scene?.getScene('play')?.run)); i++) {
   await page.clock.runFor(100);
 }
+await page.clock.runFor(1000);
+await page.screenshot({ path: `${prefix}-0-title.png` });
 // Start a run from the title screen.
 await page.keyboard.press('Enter');
 await page.clock.runFor(100);
@@ -38,7 +45,7 @@ const frames = async (ms) => {
   for (let t = 0; t < ms; t += 16) await page.clock.runFor(16);
 };
 const shot = async (name) => {
-  await page.screenshot({ path: `screenshots/tour-${name}.png` });
+  await page.screenshot({ path: `${prefix}-${name}.png` });
   console.log(name, JSON.stringify(await state()));
 };
 
@@ -71,6 +78,10 @@ await page.keyboard.up('Space');
 for (let i = 0; i < 300 && (await state()).mode === 'air'; i++) await frames(16);
 await frames(200);
 await shot('5-after-attempt');
+// Fully zoomed out (the camera's limit, MIN_ZOOM_MUL): it eases back in over the next frames.
+await page.evaluate(() => (window.__game.scene.getScene('play').view.zoomMul = 0.42));
+await page.clock.runFor(16);
+await shot('5b-zoomed-out');
 
 // Obstacles and coins, on a mountain where they all turn up early. An
 // autopilot hops rocks and jumps onto cabin roofs; each moment is shot once.
@@ -79,7 +90,7 @@ const p2 = await browser.newPage({ viewport: { width: w, height: h }, deviceScal
 p2.on('pageerror', (e) => errors.push(e.message));
 await p2.clock.install({ time: 0 });
 await p2.clock.pauseAt(1000);
-await p2.goto(`http://localhost:${port}/?seed=${seed2}${process.env.DEBUG ? '&debug' : ''}`);
+await p2.goto(`http://localhost:${port}/?seed=${seed2}${extra}`);
 for (let i = 0; i < 40 && !(await p2.evaluate(() => !!window.__game?.scene?.getScene('play')?.run)); i++) await p2.clock.runFor(100);
 await p2.keyboard.press('Enter');
 await p2.clock.runFor(100);
@@ -112,7 +123,7 @@ const look = () =>
 const wanted = new Set(['6-rock-ahead', '6b-rock-hop', '7-cabin-ahead', '8-cabin-roof', '9-ice', '10-coin-arc']);
 const shot2 = async (name, st) => {
   if (!wanted.delete(name)) return;
-  await p2.screenshot({ path: `screenshots/tour-${name}.png` });
+  await p2.screenshot({ path: `${prefix}-${name}.png` });
   console.log(name, JSON.stringify(st));
 };
 let jumpHeld = false;

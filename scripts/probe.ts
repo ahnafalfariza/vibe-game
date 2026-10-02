@@ -1,9 +1,12 @@
 // Headless feel probe: run the simulation with simple bots and print stats.
-// Usage: bun run probe
+// Usage: bun run probe   (BIOME=twilight bun run probe for another biome's spawns)
 import { Run, SIM_DT } from '../src/sim/run';
 import { createTuning } from '../src/tuning';
 import type { RunEvent } from '../src/sim/run';
 import type { Cluster } from '../src/sim/spawner';
+import { BIOMES, findBiome } from '../src/biomes';
+
+const spawns = (findBiome(process.env.BIOME ?? null) ?? BIOMES[0]).spawns;
 
 type Bot = (run: Run, t: number) => { held: boolean; pressed: boolean };
 
@@ -67,7 +70,7 @@ const BOTS: [string, () => Bot][] = [
 
 function simulate(name: string, bot: Bot, seed: number, seconds: number) {
   // The avalanche is off here so every bot gets the full time; survive() tests it.
-  const run = new Run(seed, createTuning(), false, true);
+  const run = new Run(seed, createTuning(), false, true, spawns);
   const events: RunEvent[] = [];
   let prevHeld = false;
   let speedSum = 0;
@@ -128,7 +131,7 @@ function simulate(name: string, bot: Bot, seed: number, seconds: number) {
 
 /** Seconds until the avalanche catches the bot (capped at 5 minutes). */
 function survive(bot: Bot, seed: number): string {
-  const run = new Run(seed, createTuning());
+  const run = new Run(seed, createTuning(), true, true, spawns);
   let prevHeld = false;
   let minGap = Infinity;
   for (let t = 0; t < 300 && !run.caught; t += SIM_DT) {
