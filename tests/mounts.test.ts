@@ -333,6 +333,12 @@ describe('Eagle', () => {
     under.spawner.addMount('eagle', 650);
     stepUntil(under, 2, () => under.skier.x > 900);
     expect(under.mounts.state).toBe('foot');
+    // Even on the tallest stack: only a jump reaches it.
+    const tall = bench();
+    board(tall, 'snowmobile', 'bear');
+    tall.spawner.addMount('eagle', 650);
+    stepUntil(tall, 2, () => tall.skier.x > 900);
+    expect(tall.mounts.state).toBe('riding');
 
     // Jump (a tap) into it.
     stepUntil(run, 3, () => sk.x > eagle.x - 160);

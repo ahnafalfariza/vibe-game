@@ -187,6 +187,7 @@ export class PlayScene extends Phaser.Scene {
 
   /** A fresh mountain; keeps playing unless on the title screen (or `play` says otherwise). */
   newRun(play = this.state !== 'menu'): void {
+    this.bank();
     this.scene.restart({ seed: this.ctx.fixedSeed ?? randomSeed(), play });
   }
 
@@ -205,6 +206,13 @@ export class PlayScene extends Phaser.Scene {
     this.scene.resume();
     this.ctx.sfx.setPaused(false);
     this.ctx.menu.hide();
+  }
+
+  /** Keep what a run left early earned: coins, goal progress, best distance. No-op once banked. */
+  private bank(): void {
+    if (!this.goals) return;
+    this.goals.finish(this.final ?? this.progress());
+    persist();
   }
 
   private releaseInput(): void {
@@ -248,7 +256,11 @@ export class PlayScene extends Phaser.Scene {
     };
     this.game.events.on(Phaser.Core.Events.BLUR, away);
     this.game.events.on(Phaser.Core.Events.HIDDEN, away);
+    // Closing the tab or swiping the app away is quitting too.
+    const leave = () => this.bank();
+    window.addEventListener('pagehide', leave);
     this.events.once('shutdown', () => {
+      window.removeEventListener('pagehide', leave);
       this.game.events.off(Phaser.Core.Events.BLUR, away);
       this.game.events.off(Phaser.Core.Events.HIDDEN, away);
     });
