@@ -4,13 +4,25 @@ An endless downhill skiing game for the browser, inspired by *Ski Safari*.
 You play a yeti on skis, outrunning an avalanche.
 Portfolio / learning project. Not affiliated with the original.
 
-**Status: Phases 1–3 built (real-phone test pending).** Endless procedural
-slope, jump, hold-to-backflip, landing judgement, crash and recover, an
-avalanche chasing you, rocks, cabins with rideable roofs, ice patches, coin
-clusters, mounts (penguin, eagle, snowmobile, polar bear), score with a trick
-multiplier, goals and ranks, a coin shop, two biomes (Alpine and Twilight
-Pines), synthesised sound and music, and title / pause / game-over screens. See [`docs/research.md`](docs/research.md) for the
-plan and [`docs/roadmap.md`](docs/roadmap.md) for progress.
+**Play it: <https://vibe-game.alfariza-ahnaf10.workers.dev>** (desktop or phone, landscape)
+
+![The yeti riding a snowmobile with a penguin, just after grabbing a full coin cluster](docs/screenshots/snowmobile.png)
+
+| | |
+|---|---|
+| ![Riding over a cabin roof](docs/screenshots/cabin-roof.png) | ![Carried by an eagle](docs/screenshots/eagle.png) |
+| Ride over cabin roofs (hit the wall and you wipe out) | An eagle carries you through the air |
+| ![A polar bear smashing a rock](docs/screenshots/polar-bear.png) | ![The Twilight Pines biome, avalanche close behind](docs/screenshots/twilight.png) |
+| A polar bear smashes straight through rocks | Twilight Pines, with the avalanche close behind |
+
+**Status: Phases 1–3 built and deployed (real-phone test pending).** Endless
+procedural slope, jump, hold-to-backflip, landing judgement, crash and
+recover, an avalanche chasing you, rocks, cabins with rideable roofs, ice
+patches, coin clusters, mounts (penguin, eagle, snowmobile, polar bear), score
+with a trick multiplier, goals and ranks, a coin shop, two biomes (Sunny
+Slopes and Twilight Pines), synthesised sound and music, and title / pause /
+game-over screens. See [`docs/research.md`](docs/research.md) for the plan and
+[`docs/roadmap.md`](docs/roadmap.md) for progress and known rough edges.
 
 ## Run it
 
@@ -101,6 +113,10 @@ scripts/
   probe.ts      Headless bots that play the sim and report air time, landings, speed, survival, mounts, coins (BIOME)
   smoke.mjs     Headless Chromium smoke test (fails on console errors)
   tour.mjs      Scripted play-through on a faked clock → screenshots/ (SEED, OBSTACLE_SEED, BIOME)
+docs/
+  research.md   The plan: references, mechanics, tech choices, phases
+  roadmap.md    What's built versus planned, and what's next
+  screenshots/  README images, picked from a tour run
 ```
 
 Why custom physics instead of Matter.js / Box2D, and why templates instead of
@@ -113,7 +129,20 @@ bun run test       # unit tests
 bun run typecheck
 bun run probe      # headless feel stats
 bun run build && bun run smoke   # browser smoke test
+bun run build && bun run tour    # screenshots of key moments → screenshots/
 ```
 
 `smoke` and `tour` serve the build on ports 4173 / 4175; set `PORT=…` to use
-another one.
+another one. To refresh the README images, run the tour (and
+`BIOME=twilight bun run tour`) and copy the shots you want into
+`docs/screenshots/`.
+
+## Deploy
+
+Hosted on Cloudflare Workers as a static site: [`wrangler.jsonc`](wrangler.jsonc)
+serves the Vite build from `dist/`, and every pull request gets its own
+preview URL. To deploy by hand:
+
+```bash
+bun run build && bunx wrangler deploy
+```
