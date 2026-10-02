@@ -7,7 +7,7 @@ import { createTuning } from './tuning';
 import { Tuner, loadSavedTuning } from './ui/tuner';
 import { Menu } from './ui/menu';
 import { Sfx } from './audio';
-import { findBiome, loadBiome } from './biomes';
+import { findBiome, isBiomeUnlocked, loadBiome, saveBiome } from './biomes';
 
 async function main(): Promise<void> {
   // Make sure the UI font is ready before Phaser rasterises any text.
@@ -37,10 +37,17 @@ async function main(): Promise<void> {
         toggleMute: () => sfx.toggleMute(),
         toggleMusic: () => sfx.toggleMusic(),
         click: () => sfx.click(),
+        biome: (id) => {
+          ctx.biome = id;
+          if (isBiomeUnlocked(id)) saveBiome(id);
+          // The demo run behind the title switches right away.
+          scene()?.newRun(false);
+        },
       },
       touch,
       sfx.muted,
       sfx.musicOn,
+      biome,
     ),
     fixedSeed: seedParam !== null && Number.isFinite(Number(seedParam)) ? Number(seedParam) >>> 0 : null,
     debug: params.has('debug'),
