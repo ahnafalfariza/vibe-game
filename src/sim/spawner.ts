@@ -124,7 +124,7 @@ export const START_CLEAR = 5000;
 /** A ghost flight at least this long is a forced landing zone, s (shorter ones are hops). */
 export const FORCED_AIR = 0.25;
 /** Riders sailing past a cabin wall must clear its roof by this much, px (slower riders fly lower). */
-const ROOF_CLEAR = 60;
+const ROOF_CLEAR = 20;
 /** Keep obstacles this far before a forced takeoff: the kicker run-in and lip, px. */
 const LIP_CLEAR = 300;
 /** Landings scatter this far short of a ghost's touchdown (riders a bit slower), px. */
@@ -135,7 +135,7 @@ const MIN_REACT = 250;
 /** Clear snow between obstacles (and ice): land one, see the next, jump it, px. */
 const OBSTACLE_GAP = 1500;
 /** Extra clear run-up before a cabin wall: you must already be on your way up when you reach it, px. */
-const CABIN_RUNUP = 500;
+const CABIN_RUNUP = 400;
 /** Rolling off a cabin roof lands you in this stretch after it, px. */
 const CABIN_RUNOFF = 900;
 /** One spawn roll per this much feature length, px. */
@@ -345,8 +345,9 @@ export class Spawner implements Ground {
    */
   private cabinFits(a: number, b: number, roofY: number): boolean {
     const runUp = a - CABIN_RUNUP;
-    if (runUp < START_CLEAR || runUp - this.lastObstacleEnd < OBSTACLE_GAP || this.coinsOverlap(runUp - 150, b + 150)) return false;
-    // Rolling off the roof drops you onto plain downhill snow, not into a ramp.
+    if (runUp < START_CLEAR || runUp - this.lastObstacleEnd < OBSTACLE_GAP || this.coinsOverlap(a - 100, b + 100)) return false;
+    // Ride up to it, and roll off the roof onto, plain downhill snow: no ramps.
+    for (let x = runUp; x < a; x += 50) if (this.terrain.sample(x).dy < 0.05) return false;
     for (let x = b; x < b + CABIN_RUNOFF / 2; x += 50) if (this.terrain.sample(x).dy < 0.05) return false;
     for (const f of this.flights) {
       if (f.ghost.name === 'slow') {
