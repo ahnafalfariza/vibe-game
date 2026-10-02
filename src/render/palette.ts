@@ -41,6 +41,25 @@ export const palette = {
 
   ink: 0x243049,
   flake: 0xffffff,
+
+  // ---- Obstacles & pickups (render/obstacleView.ts) ----
+  rock: 0x6a7b9c,
+  rockShade: 0x48566f,
+  rockLight: 0x95a7c6,
+  logWall: 0xb07a52,
+  logShade: 0x87583a,
+  logEnd: 0xe0b182,
+  roof: 0x7a4535,
+  roofShade: 0x5e3328,
+  chimney: 0x8d93a8,
+  windowGlow: 0xffd66e,
+  door: 0x6b4232,
+  ice: 0xb4ecff,
+  iceDeep: 0x6ac4f2,
+  iceShine: 0xffffff,
+  coin: 0xffcf3f,
+  coinRim: 0xe2961c,
+  coinShine: 0xfff6cf,
 } as const;
 
 /** CSS hex string for text styles. */

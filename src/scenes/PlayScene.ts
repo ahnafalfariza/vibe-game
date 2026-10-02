@@ -9,10 +9,12 @@ import { TerrainView } from '../render/terrainView';
 import { SkierView } from '../render/skierView';
 import { SnowSpray, Snowfall } from '../render/effects';
 import { AvalancheView } from '../render/avalancheView';
+import { ObstacleView } from '../render/obstacleView';
 import { palette } from '../render/palette';
 import { Hud } from '../ui/hud';
 import type { Tuner } from '../ui/tuner';
 import { loadBest, saveBest, type Menu } from '../ui/menu';
+import { addToWallet } from '../wallet';
 import type { Sfx } from '../audio';
 
 export interface GameContext {
@@ -64,6 +66,7 @@ export class PlayScene extends Phaser.Scene {
   private snowfall!: Snowfall;
   private hud!: Hud;
   private avalancheView!: AvalancheView;
+  private obstacleView!: ObstacleView;
 
   // Per-run state (reset in create(): the scene instance is reused on restart).
   private state: State = 'menu';
@@ -110,16 +113,18 @@ export class PlayScene extends Phaser.Scene {
     // stay behind the skier.
     const bgLayer = this.add.layer();
     const terrainLayer = this.add.layer();
+    const propLayer = this.add.layer();
     const actorLayer = this.add.layer();
     const avalancheLayer = this.add.layer();
     const uiLayer = this.add.layer();
-    bgCam.ignore([terrainLayer, actorLayer, avalancheLayer, uiLayer]);
+    bgCam.ignore([terrainLayer, propLayer, actorLayer, avalancheLayer, uiLayer]);
     this.worldCam.ignore([bgLayer, uiLayer]);
-    this.uiCam.ignore([bgLayer, terrainLayer, actorLayer, avalancheLayer]);
+    this.uiCam.ignore([bgLayer, terrainLayer, propLayer, actorLayer, avalancheLayer]);
 
     this.background = new Background(this, bgLayer);
     this.terrainView = new TerrainView(this, terrainLayer, this.run.terrain);
     this.spray = new SnowSpray(this, actorLayer);
+    this.obstacleView = new ObstacleView(this, propLayer, this.run.spawner, this.run.terrain);
     this.skierView = new SkierView(this, actorLayer);
     this.avalancheView = new AvalancheView(this, avalancheLayer, this.run.terrain);
     this.snowfall = new Snowfall(this, uiLayer);
@@ -212,7 +217,7 @@ export class PlayScene extends Phaser.Scene {
     this.hud.resize(width, height);
   }
 
-  update(_time: number, deltaMs: number): void {
+  update(time: number, deltaMs: number): void {
     const dt = Math.min(deltaMs / 1000, 0.1);
     const sk = this.run.skier;
 
@@ -243,8 +248,13 @@ export class PlayScene extends Phaser.Scene {
 
     const halfW = width / zoom / 2;
     this.terrainView.update(this.view.x - halfW, this.view.x + halfW);
+    this.obstacleView.update(this.view.x - halfW, this.view.x + halfW, dt);
     this.skierView.update(x, y, angle, sk.vx, sk.vy, sk.mode === 'crash', dt);
-    this.spray.update(x, y, sk.velocity, sk.mode === 'ground' && !this.run.caught, dt);
+    // Flicker while obstacles can't knock you down (just after getting up).
+    this.skierView.container.setAlpha(sk.invulnTimer > 0 && sk.mode !== 'crash' && Math.floor(time / 70) % 2 ? 0.35 : 1);
+    // No snow kicked up on ice: the skis go quiet and slick (you can still jump as normal).
+    const onIce = sk.mode === 'ground' && this.run.spawner.sample(sk.x).ice === true;
+    this.spray.update(x, y, sk.velocity, sk.mode === 'ground' && !onIce && !this.run.caught, dt);
     if (this.run.avalanche) {
       const avSpeed = this.run.avalancheSpeed();
       // Interpolated like the skier, so the two don't jitter against each other.
@@ -266,6 +276,7 @@ export class PlayScene extends Phaser.Scene {
         kmh: (sk.velocity / PX_PER_METRE) * 3.6,
         best: this.best,
         avalancheM: gap / PX_PER_METRE,
+        coins: this.run.stats.coins,
       },
       dt,
     );
@@ -296,11 +307,13 @@ export class PlayScene extends Phaser.Scene {
     const newBest = score > this.best;
     if (newBest) saveBest(score);
     const st = this.run.stats;
+    addToWallet(st.coins);
     this.hud.setVisible(false);
     this.ctx.menu.showGameOver({
       score,
       metres: this.run.distancePx() / PX_PER_METRE,
       flips: st.flips,
+      coins: st.coins,
       bestAir: st.bestAirTime,
       best: Math.max(score, this.best),
       newBest,
@@ -371,7 +384,7 @@ export class PlayScene extends Phaser.Scene {
       vy += g * step;
       x += vx * step;
       y += vy * step;
-      const ground = this.run.terrain.height(x);
+      const ground = this.run.spawner.height(x);
       if (y >= ground) return { x, y: ground };
     }
     return { x, y };
@@ -414,6 +427,26 @@ export class PlayScene extends Phaser.Scene {
       } else if (e.type === 'award' && this.state === 'playing') {
         const [sx, sy] = toScreen(e.x, e.y);
         this.hud.popup(`+${e.points}` + (e.multiplier > 1 ? ` ×${e.multiplier}` : ''), sx, sy - 108 * u, 0xffffff, 24);
+      } else if (e.type === 'hit') {
+        const [sx, sy] = toScreen(e.x, e.y);
+        this.obstacleView.hit(e.x, e.y, e.obstacle);
+        this.spray.burst(e.x, e.y, e.obstacle === 'cabin' ? 36 : 20);
+        sfx?.thud(e.obstacle);
+        if (e.crashed) {
+          this.hud.popup('Wipeout!', sx, sy - 150 * u, palette.scarf, 40);
+          this.worldCam.shake(320, 0.009);
+          sfx?.crash();
+        } else {
+          this.worldCam.shake(200, 0.005);
+        }
+      } else if (e.type === 'coin') {
+        this.obstacleView.collect(e.x, e.y);
+        sfx?.coin(e.index);
+      } else if (e.type === 'cluster') {
+        const [sx, sy] = toScreen(e.x, e.y);
+        this.obstacleView.collect(e.x, e.y, true);
+        if (sfx) this.hud.popup(`All ${e.size} coins! Boost!`, sx, sy - 130 * u, palette.coin, 30);
+        sfx?.coinCluster();
       }
     }
     this.simEvents.length = 0;
@@ -428,14 +461,27 @@ export class PlayScene extends Phaser.Scene {
     if (this.debugTimer > 0) return;
     this.debugTimer = 0.1;
     const sk = this.run.skier;
-    const s = this.run.terrain.sample(sk.x);
+    const s = this.run.spawner.sample(sk.x);
     const deg = (r: number) => ((r * 180) / Math.PI).toFixed(0).padStart(4);
+    const counts: Record<string, number> = { rock: 0, cabin: 0, ice: 0, coin: 0 };
+    let next = '-';
+    let nextD = Infinity;
+    for (const e of this.run.spawner.entities) {
+      counts[e.kind]++;
+      const d = e.x0 - sk.x;
+      if (e.kind !== 'coin' && d > 0 && d < nextD) {
+        nextD = d;
+        next = `${e.kind} in ${d.toFixed(0)}px (${(d / Math.max(1, sk.vx)).toFixed(2)}s)`;
+      }
+    }
     this.hud.setDebug(
       [
         `seed ${this.run.seed}   fps ${this.game.loop.actualFps.toFixed(0)}   zoom ${zoom.toFixed(2)}`,
-        `mode ${sk.mode.padEnd(6)} speed ${sk.velocity.toFixed(0).padStart(5)} px/s   air ${sk.airTime.toFixed(2)}s`,
-        `body ${deg(sk.angle)}°  slope ${deg(Math.atan(s.dy))}°  spin ${deg(sk.airRotation)}°  h ${sk.heightAboveGround().toFixed(0)}px`,
+        `mode ${sk.mode.padEnd(6)} speed ${sk.velocity.toFixed(0).padStart(5)} px/s   air ${sk.airTime.toFixed(2)}s` +
+          (sk.invulnTimer > 0 ? `   invuln ${sk.invulnTimer.toFixed(2)}s` : ''),
+        `body ${deg(sk.angle)}°  slope ${deg(Math.atan(s.dy))}°  spin ${deg(sk.airRotation)}°  h ${sk.heightAboveGround().toFixed(0)}px${s.ice ? '  ICE' : ''}`,
         `feature ${this.run.terrain.featureAt(sk.x)?.kind ?? '-'}   x ${sk.x.toFixed(0)}`,
+        `entities rock ${counts.rock}  cabin ${counts.cabin}  ice ${counts.ice}  coin ${counts.coin}   next ${next}`,
       ].join('\n'),
     );
   }

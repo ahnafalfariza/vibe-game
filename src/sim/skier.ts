@@ -1,5 +1,13 @@
-import type { Terrain, TerrainSample } from './terrain';
+import type { TerrainSample } from './terrain';
 import type { Tuning } from '../tuning';
+
+/** What the skier rides on. Terrain satisfies it; the spawner adds cabin roofs and ice on top. */
+export interface Ground {
+  sample(x: number): TerrainSample;
+  height(x: number): number;
+}
+
+export type Obstacle = 'rock' | 'cabin';
 
 // Custom skier physics — deliberately NOT a rigid-body engine. The terrain is
 // a height field, so the skier is either:
@@ -28,7 +36,9 @@ export type SkierEvent =
       /** Angle between body and slope at touchdown, degrees. */
       errorDeg: number;
     }
-  | { type: 'recover'; x: number; y: number };
+  | { type: 'recover'; x: number; y: number }
+  /** Ran into an obstacle. `crashed` is false if already tumbling or still invulnerable (a cabin still smashes). */
+  | { type: 'hit'; x: number; y: number; obstacle: Obstacle; crashed: boolean };
 
 export interface SkierInput {
   /** Button is currently down. */
@@ -55,6 +65,15 @@ function approach(v: number, target: number, maxDelta: number): number {
   return v < target ? Math.min(v + maxDelta, target) : Math.max(v - maxDelta, target);
 }
 
+/**
+ * How much higher the ground at `next` is than at the previous point (height
+ * `prevY`, `dx` back), beyond what its slope explains. ~0 on smooth ground at
+ * any speed; about the wall height when crossing into a cabin.
+ */
+function stepUp(prevY: number, next: TerrainSample, dx: number): number {
+  return prevY - (next.y - next.dy * dx);
+}
+
 /** How much a jump points straight up vs. along the slope normal (0 = normal, 1 = up). */
 const JUMP_UP_BLEND = 0.5;
 /** Below this height the landing assist aims for the slope instead of the travel direction, px. */
@@ -63,6 +82,22 @@ const ASSIST_GROUND_HEIGHT = 220;
 const PLAYER_SPUN_RAD = 0.35;
 /** Friction multiplier while tumbling. */
 const CRASH_FRICTION = 4;
+/**
+ * A step up in the ground bigger than this (beyond what the slope explains) is
+ * a wall: a cabin side. Smooth terrain never comes close, px.
+ */
+const WALL_STEP = 30;
+/** Clipping a roof edge by this much (plus one step of fall) still lands on it, px. */
+const EDGE_GRAB = 10;
+
+/**
+ * Body hitbox for obstacle and coin overlap: circles along the body, measured
+ * up from the feet. The yeti is ~40 px wide and ~75 px tall above the feet.
+ */
+export const BODY: readonly { up: number; r: number }[] = [
+  { up: 20, r: 20 },
+  { up: 55, r: 20 },
+];
 
 export class Skier {
   mode: SkierMode = 'ground';
@@ -79,16 +114,18 @@ export class Skier {
   /** Rotation from player input since leaving the ground (negative = backwards). */
   airRotation = 0;
   crashTimer = 0;
+  /** Obstacles can't knock you down while this runs (just after getting up). */
+  invulnTimer = 0;
   private coyoteTimer = 0;
   private jumpBufferTimer = 0;
   private jumpedThisAir = false;
 
   constructor(
-    private readonly terrain: Terrain,
+    private readonly ground: Ground,
     private readonly tuning: Tuning,
     x = 0,
   ) {
-    const s = terrain.sample(x);
+    const s = ground.sample(x);
     this.x = x;
     this.y = s.y;
     this.angle = Math.atan(s.dy);
@@ -104,12 +141,68 @@ export class Skier {
     return Math.hypot(this.vx, this.vy);
   }
 
-  /** Height of the feet above the snow directly below, px. */
+  /** Can an obstacle knock you down right now? */
+  get vulnerable(): boolean {
+    return this.mode !== 'crash' && this.invulnTimer <= 0;
+  }
+
+  /** Height of the feet above the snow (or roof) directly below, px. */
   heightAboveGround(): number {
-    return Math.max(0, this.terrain.height(this.x) - this.y);
+    return Math.max(0, this.ground.height(this.x) - this.y);
+  }
+
+  /** Does a circle at (x, y) with radius r overlap the body hitbox? */
+  touches(x: number, y: number, r: number): boolean {
+    const ux = Math.sin(this.angle);
+    const uy = -Math.cos(this.angle);
+    for (const c of BODY) {
+      const dx = this.x + ux * c.up - x;
+      const dy = this.y + uy * c.up - y;
+      if (dx * dx + dy * dy < (c.r + r) * (c.r + r)) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Run into an obstacle: the same tumble as a crash landing, unless already
+   * tumbling or invulnerable. `x` is where it happened (defaults to here).
+   */
+  hit(obstacle: Obstacle, events: SkierEvent[], x = this.x): void {
+    const t = this.tuning;
+    const crashed = this.vulnerable;
+    if (crashed) {
+      if (this.mode === 'air') {
+        // Knocked out of the air: drop onto the snow, keeping the along-slope speed.
+        const s = this.ground.sample(this.x);
+        const inv = 1 / Math.sqrt(1 + s.dy * s.dy);
+        this.speed = this.vx * inv + this.vy * s.dy * inv;
+        this.y = s.y;
+        this.angle = Math.atan(s.dy);
+      }
+      this.speed = clamp(this.speed * t.crashSpeedKeep, t.minSpeed, t.maxSpeed);
+      this.mode = 'crash';
+      this.crashTimer = t.crashDuration;
+      this.jumpBufferTimer = 0;
+      this.angVel = 0;
+    }
+    events.push({ type: 'hit', x, y: this.y, obstacle, crashed });
+  }
+
+  /** A burst of speed along the direction of travel (coin cluster bonus), px/s. */
+  boost(amount: number): void {
+    const max = this.tuning.maxSpeed;
+    if (this.mode !== 'air') {
+      this.speed = Math.min(max, this.speed + amount);
+      return;
+    }
+    const v = this.velocity;
+    const k = v > 0 ? Math.min(max, v + amount) / v : 1;
+    this.vx *= k;
+    this.vy *= k;
   }
 
   step(dt: number, input: SkierInput, events: SkierEvent[]): void {
+    this.invulnTimer -= dt;
     if (this.mode === 'air') this.stepAir(dt, input, events);
     else this.stepGround(dt, input, events);
   }
@@ -117,14 +210,15 @@ export class Skier {
   private stepGround(dt: number, input: SkierInput, events: SkierEvent[]): void {
     const t = this.tuning;
     const crashed = this.mode === 'crash';
-    const s = this.terrain.sample(this.x);
+    const s = this.ground.sample(this.x);
     const inv = 1 / Math.sqrt(1 + s.dy * s.dy);
     const tx = inv;
     const ty = s.dy * inv;
 
-    // Gravity along the slope, minus snow friction and drag.
-    const friction = t.groundFriction * (crashed ? CRASH_FRICTION : 1);
-    const accel = t.gravity * ty - friction * t.gravity * inv - t.groundDrag * this.speed * Math.abs(this.speed);
+    // Gravity along the slope, minus snow friction and drag. Ice is slick on both counts.
+    const friction = (s.ice ? t.iceFriction : t.groundFriction) * (crashed ? CRASH_FRICTION : 1);
+    const drag = t.groundDrag * (s.ice ? t.iceDrag : 1);
+    const accel = t.gravity * ty - friction * t.gravity * inv - drag * this.speed * Math.abs(this.speed);
     this.speed = clamp(this.speed + accel * dt, t.minSpeed, t.maxSpeed);
 
     if (crashed) {
@@ -132,6 +226,7 @@ export class Skier {
       if (this.crashTimer <= 0) {
         this.mode = 'ground';
         this.crashTimer = 0;
+        this.invulnTimer = t.hitInvulnTime;
         events.push({ type: 'recover', x: this.x, y: this.y });
       }
     } else {
@@ -145,13 +240,20 @@ export class Skier {
     const vx = this.speed * tx;
     const vy = this.speed * ty;
     const nx = this.x + vx * dt;
-    const next = this.terrain.sample(nx);
+    const next = this.ground.sample(nx);
+
+    // Ran into a wall (a cabin side): stop short of it and crash.
+    if (stepUp(this.y, next, nx - this.x) > WALL_STEP) {
+      this.hit('cabin', events, nx);
+      return;
+    }
 
     // If a free-falling body would end up above the snow, the ground has
     // dropped away faster than gravity can follow: launch. groundStick adds a
-    // little extra "downforce" so small bumps don't make you hop.
+    // little extra "downforce" so small bumps don't make you hop. A tumbling
+    // skier stays glued to the snow, except off a sheer drop like a roof end.
     const ballisticY = this.y + vy * dt + 0.5 * t.gravity * dt * dt;
-    if (!crashed && next.y > ballisticY + 0.5 * t.groundStick * dt * dt) {
+    if ((!crashed || next.y - this.y > WALL_STEP) && next.y > ballisticY + 0.5 * t.groundStick * dt * dt) {
       this.leaveGround(nx, ballisticY, vx, vy);
       this.coyoteTimer = t.coyoteTime;
       events.push({ type: 'takeoff', x: this.x, y: this.y });
@@ -186,6 +288,7 @@ export class Skier {
     const drag = Math.max(0, 1 - t.airDrag * this.velocity * dt);
     this.vx *= drag;
     this.vy *= drag;
+    const ox = this.x;
     this.x += this.vx * dt;
     this.y += this.vy * dt;
 
@@ -196,7 +299,7 @@ export class Skier {
       // Landing assist: ease toward the travel direction, or toward the slope
       // about to be landed on when close to the snow. Only kicks in near the
       // safe angle, so a botched flip still crashes.
-      const ahead = this.terrain.sample(this.x + this.vx * 0.08);
+      const ahead = this.ground.sample(this.x + this.vx * 0.08);
       const target =
         ahead.y - this.y < ASSIST_GROUND_HEIGHT ? Math.atan(ahead.dy) : Math.atan2(this.vy, this.vx);
       const error = wrapAngle(target - this.angle);
@@ -212,8 +315,18 @@ export class Skier {
     this.airRotation += this.angVel * dt;
     this.airTime += dt;
 
-    const ground = this.terrain.sample(this.x);
-    if (this.y >= ground.y) this.land(ground, events);
+    const ground = this.ground.sample(this.x);
+    if (this.y >= ground.y) {
+      // Crossed into a cabin below its roof: that's the wall, not a teleport
+      // onto the roof. Clipping the edge by a hair still counts as landing.
+      const below = this.y - ground.y;
+      if (below > Math.max(0, this.vy) * dt + EDGE_GRAB && stepUp(this.ground.height(ox), ground, this.x - ox) > WALL_STEP) {
+        const wallX = this.x;
+        this.x = ox;
+        this.hit('cabin', events, wallX);
+        // Invulnerable: the cabin smashes and you fly on through.
+      } else this.land(ground, events);
+    }
   }
 
   private land(s: TerrainSample, events: SkierEvent[]): void {

@@ -23,6 +23,7 @@ export interface RunResult {
   score: number;
   metres: number;
   flips: number;
+  coins: number;
   bestAir: number;
   best: number;
   newBest: boolean;
@@ -140,7 +141,7 @@ export class Menu {
     const el = this.screens.over;
     el.querySelector('.score')!.textContent = fmt(r.score);
     (el.querySelector('.new-best') as HTMLElement).hidden = !r.newBest;
-    el.querySelector('.stats')!.textContent = `${fmt(r.metres)} m · ${r.flips} flips · best air ${r.bestAir.toFixed(1)}s`;
+    el.querySelector('.stats')!.textContent = `${fmt(r.metres)} m · ${r.flips} flips · ${r.coins} coins · best air ${r.bestAir.toFixed(1)}s`;
     el.querySelector('.best')!.textContent = r.newBest ? '' : `Best ${fmt(r.best)}`;
     this.show('over');
   }

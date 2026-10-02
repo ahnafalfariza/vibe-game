@@ -24,6 +24,8 @@ export interface TerrainSample {
   dy: number;
   /** Second derivative d²y/dx². Positive on crests (y-down coordinates). */
   ddy: number;
+  /** Slick ice underfoot (set by the spawner's ground overlay, never by Terrain). */
+  ice?: boolean;
 }
 
 export type FeatureKind = 'start' | 'cruise' | 'rollers' | 'kicker' | 'drop' | 'bowl' | 'booter';
@@ -118,7 +120,7 @@ const BASE_WEIGHTS: Record<Exclude<FeatureKind, 'start'>, number> = {
 };
 
 /** Distance (px) over which difficulty ramps from 0 to 1. */
-const DIFFICULTY_RAMP = 60000;
+export const DIFFICULTY_RAMP = 60000;
 
 export class Terrain {
   readonly features: Feature[] = [];

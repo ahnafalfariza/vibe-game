@@ -128,9 +128,9 @@ describe('Skier landings', () => {
 });
 
 describe('A whole run', () => {
-  it('never crashes a player who does nothing', () => {
+  it('never crashes a player who does nothing (on a slope without obstacles)', () => {
     for (const seed of [1, 2, 3, 4, 5]) {
-      const run = new Run(seed, createTuning());
+      const run = new Run(seed, createTuning(), true, false);
       const events: SkierEvent[] = [];
       for (let t = 0; t < 60; t += SIM_DT) run.step(NO_INPUT, events);
       expect(run.stats.crashes, `seed ${seed}`).toBe(0);

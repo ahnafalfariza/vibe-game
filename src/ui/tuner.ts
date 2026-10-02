@@ -36,6 +36,11 @@ const RANGES: Record<keyof Tuning, Range> = {
   avalancheSpeed: [0, 1500, 10],
   avalancheAccel: [0, 30, 0.5],
   avalancheMaxGap: [800, 6000, 100],
+  iceFriction: [0, 0.1, 0.001],
+  iceDrag: [0, 1, 0.05],
+  coinClusterBoost: [0, 1000, 10],
+  hitInvulnTime: [0, 3, 0.05],
+  obstacleDensity: [0, 3, 0.1],
 };
 
 const GROUPS: [string, (keyof Tuning)[]][] = [
@@ -44,6 +49,7 @@ const GROUPS: [string, (keyof Tuning)[]][] = [
   ['Landing', ['landingAssist', 'landingAssistDeg', 'cleanLandingDeg', 'crashLandingDeg', 'sloppySpeedKeep', 'crashSpeedKeep', 'crashDuration']],
   ['Mountain (new runs)', ['mountainSlope']],
   ['Avalanche', ['avalancheStartGap', 'avalancheSpeed', 'avalancheAccel', 'avalancheMaxGap']],
+  ['Obstacles & coins', ['obstacleDensity', 'hitInvulnTime', 'iceFriction', 'iceDrag', 'coinClusterBoost']],
 ];
 
 export function loadSavedTuning(): Partial<Tuning> {
