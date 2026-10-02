@@ -25,20 +25,41 @@ export const palette = {
   pineFar: 0x7ea7c9,
   trunk: 0x6b4a3a,
 
-  jacket: 0xff7a45,
-  jacketShade: 0xe0602f,
-  pants: 0x34466b,
+  // The yeti. Cool lavender fur with a dark outline so it reads on white
+  // snow; warm accents (beanie, scarf, boots) for what the player tracks.
+  fur: 0xd2d3f5,
+  furShade: 0xa9a9df,
+  furLight: 0xf0f0ff,
+  furLine: 0x4c4f8c,
+  face: 0x5d6198,
+  eye: 0xffffff,
   beanie: 0xffc93c,
-  pompom: 0xffffff,
+  beanieCuff: 0xf5ad2a,
   scarf: 0xef476f,
-  skin: 0xffd9b8,
-  goggles: 0x243049,
-  lens: 0x8fe3ff,
+  boots: 0xff7a45,
   skis: 0x34466b,
-  pole: 0x8a96aa,
 
   ink: 0x243049,
   flake: 0xffffff,
+
+  // ---- Obstacles & pickups (render/obstacleView.ts) ----
+  rock: 0x6a7b9c,
+  rockShade: 0x48566f,
+  rockLight: 0x95a7c6,
+  logWall: 0xb07a52,
+  logShade: 0x87583a,
+  logEnd: 0xe0b182,
+  roof: 0x7a4535,
+  roofShade: 0x5e3328,
+  chimney: 0x8d93a8,
+  windowGlow: 0xffd66e,
+  door: 0x6b4232,
+  ice: 0xb4ecff,
+  iceDeep: 0x6ac4f2,
+  iceShine: 0xffffff,
+  coin: 0xffcf3f,
+  coinRim: 0xe2961c,
+  coinShine: 0xfff6cf,
 } as const;
 
 /** CSS hex string for text styles. */

@@ -1,6 +1,7 @@
 // Every sound is synthesised with WebAudio: no audio files to load. Looping
 // beds (ski hiss, wind, avalanche rumble) follow the game state; one-shots
-// fire on events. Browsers only allow audio after a user gesture, so the
+// fire on events; the music loop (bottom of the file) follows the same state.
+// Browsers only allow audio after a user gesture, so the
 // context is created on the first tap / key press (the title screen's Play
 // button is usually that gesture).
 
@@ -16,6 +17,8 @@ export interface AmbienceState {
   danger: number;
   /** False on the title screen: quieter, no rumble. */
   playing: boolean;
+  /** The avalanche got you: the music fades out until the next run or title screen. */
+  caught: boolean;
 }
 
 export class Sfx {
@@ -25,8 +28,10 @@ export class Sfx {
   private hiss!: { gain: GainNode; filter: BiquadFilterNode };
   private wind!: { gain: GainNode; filter: BiquadFilterNode };
   private rumble!: GainNode;
+  private music!: Music;
   private paused = false;
   muted: boolean;
+  musicOn = readMusicOn();
 
   constructor() {
     this.muted = readMuted();
@@ -82,12 +87,14 @@ export class Sfx {
     rumble.gain.disconnect();
     rumble.gain.connect(deep).connect(this.master);
     this.rumble = rumble.gain;
+    this.music = new Music(ctx, this.master, this.noise, this.musicOn);
   }
 
   /** Freeze all sound (pause menu). */
   setPaused(paused: boolean): void {
     this.paused = paused;
     if (!this.ctx) return;
+    this.music.paused = paused;
     void (paused ? this.ctx.suspend() : this.ctx.resume());
   }
 
@@ -102,6 +109,18 @@ export class Sfx {
     return this.muted;
   }
 
+  /** Music only; "Sound: off" silences it too. Returns the new state. */
+  toggleMusic(): boolean {
+    this.musicOn = !this.musicOn;
+    try {
+      localStorage.setItem(MUSIC_KEY, this.musicOn ? '1' : '0');
+    } catch {
+      // Storage unavailable: the setting just won't persist.
+    }
+    if (this.ctx) this.music.enabled = this.musicOn;
+    return this.musicOn;
+  }
+
   /** Called every frame. */
   ambience(s: AmbienceState): void {
     const ctx = this.ctx;
@@ -114,6 +133,7 @@ export class Sfx {
     this.wind.gain.gain.setTargetAtTime((0.02 + (s.grounded ? 0.1 : 0.22) * v) * vol, now, 0.2);
     this.wind.filter.frequency.setTargetAtTime(300 + 900 * v, now, 0.2);
     this.rumble.gain.setTargetAtTime(s.playing ? 1.4 * s.danger * s.danger : 0, now, 0.15);
+    this.music.state = s;
   }
 
   jump(): void {
@@ -184,6 +204,29 @@ export class Sfx {
     src.start(t, Math.random());
     src.stop(t + dur + 0.05);
   }
+
+  /** Coin pickup: a bright blip that climbs the scale with each coin of a cluster. */
+  coin(index: number): void {
+    const f = 987.77 * 2 ** (SCALE[Math.min(index, SCALE.length - 1)] / 12);
+    this.tone('square', f, f, 0.07, 0.05);
+    this.tone('sine', f * 2, f * 2, 0.09, 0.08, 0.02);
+  }
+
+  /** Every coin of a cluster: a quick rising jingle. */
+  coinCluster(): void {
+    [0, 4, 7, 12, 16].forEach((semi, i) => {
+      const f = 1046.5 * 2 ** (semi / 12);
+      this.tone('triangle', f, f, 0.16, 0.16, i * 0.06);
+      this.tone('sine', f * 2, f * 2, 0.12, 0.05, i * 0.06);
+    });
+  }
+
+  /** Ran into a rock (stony knock) or a cabin (woody crunch). */
+  thud(obstacle: 'rock' | 'cabin'): void {
+    this.tone('sine', 120, 45, 0.25, 0.7);
+    if (obstacle === 'rock') this.noiseBurst(0.12, 'bandpass', 1800, 600, 0.45);
+    else this.noiseBurst(0.35, 'bandpass', 700, 250, 0.6);
+  }
 }
 
 /** Quick attack, exponential decay. */
@@ -200,5 +243,209 @@ function readMuted(): boolean {
     return localStorage.getItem(MUTE_KEY) === '1';
   } catch {
     return false;
+  }
+}
+
+// ---- Music ------------------------------------------------------------------
+// One synthesised loop in C: eight bars of chords played twice, the bell tune
+// joining the second time round. A lookahead scheduler queues each 16th note
+// a little ahead on the audio clock, so timing stays sample-accurate through
+// frame hitches. The arrangement follows ambience() and changes on bar lines:
+// sparse and soft on the title screen, the full band in play, driving bass and
+// hats when the avalanche is close. It fades out when you're caught and starts
+// again from the top on the next run or title screen.
+
+const MUSIC_KEY = 'yeti-set-go.music';
+const BPM = 128;
+/** One 16th note, s. */
+const STEP = 60 / BPM / 4;
+/** Notes are queued this far ahead of the audio clock, s. */
+const LOOKAHEAD = 0.12;
+/** Overall music volume: keep it well under the effects, which carry gameplay information. */
+const MUSIC_LEVEL = 0.5;
+
+/** I–vi–ii–V, I–vi–IV–V. Pad voicing and bass root per bar, MIDI notes. */
+const CHORDS = [
+  { pad: [55, 60, 64], root: 48 }, // C
+  { pad: [57, 60, 64], root: 45 }, // Am
+  { pad: [57, 62, 65], root: 50 }, // Dm
+  { pad: [55, 59, 62], root: 43 }, // G
+  { pad: [55, 60, 64], root: 48 }, // C
+  { pad: [57, 60, 64], root: 45 }, // Am
+  { pad: [57, 60, 65], root: 41 }, // F
+  { pad: [55, 59, 62], root: 43 }, // G
+];
+const LOOP_STEPS = CHORDS.length * 16 * 2;
+
+// Patterns: one character per 16th note, '.' rests.
+/** The bell tune, per bar: a digit is an index into SCALE above C5. */
+const TUNE = [
+  '2...3.4.3.......',
+  '5...4...2.......',
+  '1...2.1.4.......',
+  '3.4.3...1.......',
+  '2...3.4.5.......',
+  '6.5.4...2.......',
+  '4...5...4...3...',
+  '1.....2.3.......',
+];
+/** bass: r root, f fifth, o octave · arp: index into the bar's chord, 3 = its root an octave up · hats: x soft, X accent. */
+const ARRANGEMENTS = {
+  title: { level: 0.6, bass: 'r.......f.......', arp: '0...2...1...2...', hats: '................' },
+  play: { level: 1, bass: 'r.....r.f...r...', arp: '0.1.2.1.3.2.1.2.', hats: '..x...x...x...x.' },
+  urgent: { level: 1, bass: 'r.o.r.o.r.o.r.o.', arp: '0.1.2.1.3.2.1.2.', hats: 'xxXxxxXxxxXxxxXx' },
+};
+const BASS_INTERVAL: Record<string, number> = { r: 0, f: 7, o: 12 };
+
+const hz = (midi: number) => 440 * 2 ** ((midi - 69) / 12);
+
+class Music {
+  /** Latest game state, from Sfx.ambience(). */
+  state: AmbienceState = { speed: 0, grounded: true, danger: 0, playing: false, caught: false };
+  paused = false;
+  private readonly bus: GainNode;
+  private readonly padFilter: BiquadFilterNode;
+  private mode: keyof typeof ARRANGEMENTS = 'title';
+  private running = false;
+  /** Next 16th note to queue: position in the loop and its time on the audio clock. */
+  private step = 0;
+  private nextTime = 0;
+
+  constructor(
+    private readonly ctx: AudioContext,
+    out: AudioNode,
+    private readonly noise: AudioBuffer,
+    public enabled: boolean,
+  ) {
+    this.bus = ctx.createGain();
+    this.bus.gain.value = 0;
+    this.bus.connect(out);
+    this.padFilter = ctx.createBiquadFilter();
+    this.padFilter.type = 'lowpass';
+    this.padFilter.frequency.value = 700;
+    this.padFilter.connect(this.bus);
+    setInterval(() => this.tick(), 25);
+  }
+
+  private tick(): void {
+    const ctx = this.ctx;
+    // The audio clock stands still while suspended (tab hidden, pause menu): nothing to queue.
+    if (this.paused || ctx.state !== 'running') return;
+    const now = ctx.currentTime;
+    const on = this.enabled && !this.state.caught;
+    if (on !== this.running) {
+      this.running = on;
+      if (on) {
+        // From the top; the first bar line fades the level back in.
+        this.step = 0;
+        this.nextTime = now + 0.05;
+      } else {
+        this.bus.gain.cancelScheduledValues(now);
+        this.bus.gain.setTargetAtTime(0, now, this.state.caught ? 0.5 : 0.05);
+      }
+    }
+    if (!on) return;
+    // After a stall (long frame, throttled timer), skip the missed notes rather than play them all at once.
+    if (this.nextTime < now) {
+      const missed = Math.ceil((now - this.nextTime) / STEP);
+      this.step = (this.step + missed) % LOOP_STEPS;
+      this.nextTime += missed * STEP;
+    }
+    while (this.nextTime < now + LOOKAHEAD) {
+      this.schedule(this.step, this.nextTime);
+      this.step = (this.step + 1) % LOOP_STEPS;
+      this.nextTime += STEP;
+    }
+  }
+
+  private schedule(step: number, t: number): void {
+    const s = step % 16;
+    const bar = (step >> 4) % CHORDS.length;
+    const chord = CHORDS[bar];
+    const { playing, danger } = this.state;
+    if (s === 0) {
+      // The arrangement only changes on the bar line.
+      this.mode = !playing ? 'title' : danger > (this.mode === 'urgent' ? 0.3 : 0.5) ? 'urgent' : 'play';
+      this.bus.gain.setTargetAtTime(ARRANGEMENTS[this.mode].level * MUSIC_LEVEL, t, 0.3);
+      this.pad(chord.pad, t, 16 * STEP);
+    }
+    // The pad brightens beat by beat as the avalanche closes in.
+    if (s % 4 === 0) this.padFilter.frequency.setTargetAtTime(700 + 2500 * danger, t, 0.2);
+
+    const part = ARRANGEMENTS[this.mode];
+    const b = part.bass[s];
+    if (b !== '.') this.note('triangle', hz(chord.root + BASS_INTERVAL[b]), t, 0.35, 0.22, this.bus);
+    const a = part.arp[s];
+    if (a !== '.') this.pluck(hz(12 + (a === '3' ? chord.pad[0] + 12 : chord.pad[+a])), t);
+    const h = part.hats[s];
+    if (h !== '.') this.hat(t, h === 'X' ? 0.05 : 0.025);
+    const m = step >= LOOP_STEPS / 2 ? TUNE[bar][s] : '.';
+    if (m !== '.') this.bell(hz(72 + SCALE[+m]), t);
+  }
+
+  /** Two detuned saws per note through the shared low-pass: soft attack, held for the bar. */
+  private pad(notes: number[], t: number, dur: number): void {
+    const ctx = this.ctx;
+    for (const n of notes) {
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.linearRampToValueAtTime(0.025, t + 0.25);
+      gain.gain.setTargetAtTime(0, t + dur - 0.1, 0.12);
+      gain.connect(this.padFilter);
+      for (const detune of [-8, 8]) {
+        const osc = ctx.createOscillator();
+        osc.type = 'sawtooth';
+        osc.frequency.value = hz(n);
+        osc.detune.value = detune;
+        osc.connect(gain);
+        osc.start(t);
+        osc.stop(t + dur + 0.6);
+      }
+    }
+  }
+
+  /** Square wave behind a closing low-pass: a soft pluck. */
+  private pluck(freq: number, t: number): void {
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(2400, t);
+    filter.frequency.exponentialRampToValueAtTime(400, t + 0.2);
+    filter.connect(this.bus);
+    this.note('square', freq, t, 0.25, 0.035, filter);
+  }
+
+  /** Sine plus a quick high partial: a music-box bell. */
+  private bell(freq: number, t: number): void {
+    this.note('sine', freq, t, 1.2, 0.07, this.bus);
+    this.note('sine', freq * 4, t, 0.12, 0.02, this.bus);
+  }
+
+  private hat(t: number, vol: number): void {
+    const ctx = this.ctx;
+    const src = ctx.createBufferSource();
+    src.buffer = this.noise;
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'highpass';
+    filter.frequency.value = 7000;
+    src.connect(filter).connect(envelope(ctx, t, 0.05, vol)).connect(this.bus);
+    src.start(t, Math.random() * 1.9);
+    src.stop(t + 0.1);
+  }
+
+  private note(type: OscillatorType, freq: number, t: number, dur: number, vol: number, dest: AudioNode): void {
+    const osc = this.ctx.createOscillator();
+    osc.type = type;
+    osc.frequency.value = freq;
+    osc.connect(envelope(this.ctx, t, dur, vol)).connect(dest);
+    osc.start(t);
+    osc.stop(t + dur + 0.05);
+  }
+}
+
+function readMusicOn(): boolean {
+  try {
+    return localStorage.getItem(MUSIC_KEY) !== '0';
+  } catch {
+    return true;
   }
 }

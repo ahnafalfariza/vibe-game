@@ -32,14 +32,17 @@ async function main(): Promise<void> {
         restart: () => scene()?.newRun(true),
         home: () => scene()?.newRun(false),
         toggleMute: () => sfx.toggleMute(),
+        toggleMusic: () => sfx.toggleMusic(),
         click: () => sfx.click(),
       },
       touch,
       sfx.muted,
+      sfx.musicOn,
     ),
     fixedSeed: seedParam !== null && Number.isFinite(Number(seedParam)) ? Number(seedParam) >>> 0 : null,
     debug: params.has('debug'),
     touch,
+    reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches,
   };
 
   // Render at device resolution (capped at 2x) and scale the canvas down with
