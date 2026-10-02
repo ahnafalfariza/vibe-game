@@ -16,6 +16,14 @@ const KEEP_BEHIND = 4000;
 export interface RunStats {
   flips: number;
   cleanLandings: number;
+  /** Clean landings with at least one flip. */
+  cleanFlips: number;
+  /** Most flips in one clean landing. */
+  bestFlips: number;
+  /** Highest trick multiplier reached. */
+  topMultiplier: number;
+  /** Metres skied before the first wipeout (all of them, if there wasn't one). */
+  noCrashMetres: number;
   crashes: number;
   bestAirTime: number;
   topSpeed: number;
@@ -39,8 +47,10 @@ export interface RunOptions {
   avalanche?: boolean;
   /** Rocks, cabins, ice and mounts. Default: only with the avalanche (the demo run has no player to dodge them). */
   obstacles?: boolean;
-  /** Start the run already riding this (rank perks, the shop, ?mount=). */
-  startMount?: MountKind;
+  /** Start the run already riding this, or these bottom of the stack first (rank perks, the shop, ?mount=). */
+  startMount?: MountKind | readonly MountKind[];
+  /** The whole score is multiplied by this (the rank's base multiplier). Default 1. */
+  scoreMultiplier?: number;
   /** What goes on the slope (a biome's spawn table). Default: the alpine one. */
   table?: SpawnTable;
 }
@@ -64,10 +74,15 @@ export class Run {
   readonly mounts: Mounts;
   readonly startX = 0;
   readonly avalanche: boolean;
+  readonly scoreMultiplier: number;
   time = 0;
   readonly stats: RunStats = {
     flips: 0,
     cleanLandings: 0,
+    cleanFlips: 0,
+    bestFlips: 0,
+    topMultiplier: 1,
+    noCrashMetres: 0,
     crashes: 0,
     bestAirTime: 0,
     topSpeed: 0,
@@ -88,15 +103,16 @@ export class Run {
   constructor(
     readonly seed: number,
     readonly tuning: Tuning,
-    { avalanche = true, obstacles = avalanche, startMount, table }: RunOptions = {},
+    { avalanche = true, obstacles = avalanche, startMount = [], table, scoreMultiplier = 1 }: RunOptions = {},
   ) {
     this.avalanche = avalanche;
+    this.scoreMultiplier = scoreMultiplier;
     this.terrain = new Terrain(seed, tuning);
     this.spawner = new Spawner(this.terrain, tuning, seed, obstacles, this.startX, table);
     this.mounts = new Mounts(tuning);
     this.skier = new Skier(this.spawner, this.mounts.tuning, this.startX);
     this.skier.guard = (cause) => this.mounts.absorb(cause, this.skier);
-    if (startMount) this.mounts.board(startMount, this.skier, []);
+    for (const kind of typeof startMount === 'string' ? [startMount] : startMount) this.mounts.board(kind, this.skier, []);
     this.avalancheX = this.startX - tuning.avalancheStartGap;
   }
 
@@ -105,9 +121,9 @@ export class Run {
     return Math.max(0, this.skier.x - this.startX);
   }
 
-  /** 1 point per metre plus trick points. */
+  /** 1 point per metre plus trick points, × the score multiplier. */
   get score(): number {
-    return Math.floor(this.distancePx() / PX_PER_METRE) + this.scoring.tricks;
+    return Math.floor((Math.floor(this.distancePx() / PX_PER_METRE) + this.scoring.tricks) * this.scoreMultiplier);
   }
 
   /** Avalanche speed right now, horizontal px/s. */
@@ -166,7 +182,11 @@ export class Run {
         if (e.quality === 'crash') st.crashes++;
         else {
           st.flips += e.flips;
-          if (e.quality === 'clean') st.cleanLandings++;
+          if (e.quality === 'clean') {
+            st.cleanLandings++;
+            if (e.flips > 0) st.cleanFlips++;
+            st.bestFlips = Math.max(st.bestFlips, e.flips);
+          }
         }
         const multiplier = e.quality === 'clean' ? this.scoring.multiplier : 1;
         i = award(i, e.x, e.y, this.scoring.land(e), multiplier);
@@ -184,6 +204,8 @@ export class Run {
         this.scoring.multiplier = 1;
       }
     }
+    st.topMultiplier = Math.max(st.topMultiplier, this.scoring.multiplier);
+    if (st.crashes === 0) st.noCrashMetres = this.distancePx() / PX_PER_METRE;
   }
 
   private stepAvalanche(): void {

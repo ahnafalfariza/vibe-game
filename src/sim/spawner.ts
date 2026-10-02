@@ -176,8 +176,6 @@ const ARC_SPAN: [number, number] = [0.08, 0.5];
 const ROCK_HIT = 0.8;
 /** Drawn coin radius, px. */
 export const COIN_R = 14;
-/** Pickup reach: a little more than the drawn coin, so a near miss still counts, px. */
-const COIN_PICKUP = 28;
 const COIN_SPACING = 80;
 /** Coins float at the body's middle so riding (or flying) through them collects them, px. */
 const COIN_LIFT = 34;
@@ -324,7 +322,7 @@ export class Spawner implements Ground {
         if (!e.broken && skier.vulnerable && skier.touches(e.x, e.y, e.r * ROCK_HIT) && skier.hit('rock', events as SkierEvent[], e.x) === 'smash') {
           e.broken = true;
         }
-      } else if (e.kind === 'coin' && !e.taken && skier.touches(e.x, e.y, COIN_PICKUP)) {
+      } else if (e.kind === 'coin' && !e.taken && skier.touches(e.x, e.y, this.tuning.coinPickup)) {
         e.taken = true;
         const c = e.cluster;
         events.push({ type: 'coin', x: e.x, y: e.y, index: c.got, size: c.size });
