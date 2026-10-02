@@ -501,6 +501,38 @@ body {
   font-size: clamp(14px, 2.7vmin, 20px);
 }
 
+/* Short portrait phones: vmin is the width there, so size by height too, or a
+   rank-up card runs past the bottom (fits down to 360x480). */
+@media (orientation: portrait) and (max-height: 700px) {
+  .over {
+    gap: 4px;
+  }
+  .over h2 {
+    font-size: max(20px, min(7vmin, 4.6vh));
+  }
+  .over .score {
+    font-size: max(32px, min(14vmin, 8.5vh));
+  }
+  .over-body {
+    row-gap: 8px;
+  }
+  .over-main {
+    gap: 2px;
+  }
+  .over .stats,
+  .over .rides,
+  .over .coins-line {
+    font-size: max(13px, min(3.9vmin, 2.7vh));
+  }
+  .over .goal-list {
+    gap: 2px;
+  }
+  .over .goal {
+    padding-block: 2px;
+    font-size: max(13px, min(3.7vmin, 2.6vh));
+  }
+}
+
 .rankup {
   margin: -2px -6px 8px;
   padding: 6px 10px 8px;

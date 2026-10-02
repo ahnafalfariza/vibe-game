@@ -232,6 +232,8 @@ export class Mounts {
         wander(m, ground);
       }
       if (skier.mode === 'crash' || skier.carried || Math.abs(m.x - skier.x) > 200) continue;
+      // Only a jump reaches an eagle: a tall stack riding underneath doesn't.
+      if (m.kind === 'eagle' && skier.mode !== 'air') continue;
       const s = MOUNTS[m.kind];
       // Mid-backflip the body hangs below the feet, out of an eagle's reach
       // overhead: let it grab as if you were upright, so holding through the

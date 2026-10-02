@@ -104,6 +104,15 @@ describe('Goals', () => {
     expect(p.goals[1].progress).toBe(20);
   });
 
+  it('banks a run once, however many times it is finished (quit, then the page closes)', () => {
+    const p = withGoals(['totalCoins', 100], ['flips', 3], ['distance', 600]);
+    const run = new RunGoals(p, rng);
+    run.finish(progress({ coins: 30 }));
+    run.finish(progress({ coins: 30 }));
+    expect(p.coins).toBe(30);
+    expect(p.goals[0].progress).toBe(30);
+  });
+
   it('adds cumulative goals up across runs', () => {
     const p = withGoals(['totalCoins', 100], ['flips', 3], ['distance', 600]);
     new RunGoals(p, rng).finish(progress({ coins: 60 }));
