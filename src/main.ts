@@ -8,6 +8,8 @@ import { Tuner, loadSavedTuning } from './ui/tuner';
 import { Menu } from './ui/menu';
 import { Sfx } from './audio';
 import { MOUNT_KINDS, type MountKind } from './sim/mounts';
+import { findBiome, forceBiome, isBiomeUnlocked, loadBiome, saveBiome } from './biomes';
+import { resetProfile, topUpCoins } from './profile';
 
 async function main(): Promise<void> {
   // Make sure the UI font is ready before Phaser rasterises any text.
@@ -17,11 +19,19 @@ async function main(): Promise<void> {
   const seedParam = params.get('seed');
   const mountParam = params.get('mount') as MountKind | null;
   const tuning = createTuning(loadSavedTuning());
+  // Dev aids: ?profile=reset starts over, ?coins=5000 tops the wallet up to at least that.
+  if (params.get('profile') === 'reset') resetProfile();
+  const coinsParam = Number(params.get('coins'));
+  if (coinsParam > 0) topUpCoins(coinsParam);
 
   let game: Phaser.Game | null = null;
   const scene = () => game?.scene.getScene('play') as PlayScene | null | undefined;
   const sfx = new Sfx();
   const touch = matchMedia('(pointer: coarse)').matches;
+  // ?biome=… forces one (for testing; not remembered, playable at any rank), else the last one picked.
+  const forced = findBiome(params.get('biome'))?.id;
+  if (forced) forceBiome(forced);
+  const biome = forced ?? loadBiome();
   const ctx: GameContext = {
     tuning,
     tuner: new Tuner(tuning, { newRun: () => scene()?.newRun() }),
@@ -36,16 +46,25 @@ async function main(): Promise<void> {
         toggleMute: () => sfx.toggleMute(),
         toggleMusic: () => sfx.toggleMusic(),
         click: () => sfx.click(),
+        purchase: () => sfx.purchase(),
+        biome: (id) => {
+          ctx.biome = id;
+          if (isBiomeUnlocked(id)) saveBiome(id);
+          // The demo run behind the title switches right away.
+          scene()?.newRun(false);
+        },
       },
       touch,
       sfx.muted,
       sfx.musicOn,
+      biome,
     ),
     fixedSeed: seedParam !== null && Number.isFinite(Number(seedParam)) ? Number(seedParam) >>> 0 : null,
     startMount: mountParam !== null && MOUNT_KINDS.includes(mountParam) ? mountParam : null,
     debug: params.has('debug'),
     touch,
     reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches,
+    biome,
   };
 
   // Render at device resolution (capped at 2x) and scale the canvas down with

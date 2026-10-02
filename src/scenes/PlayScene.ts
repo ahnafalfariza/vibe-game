@@ -2,7 +2,8 @@ import Phaser from 'phaser';
 import { Run, SIM_DT, type RunEvent } from '../sim/run';
 import { wrapAngle } from '../sim/skier';
 import { BIG_AIR_TIME } from '../sim/score';
-import { randomSeed } from '../sim/rng';
+import { Rng, randomSeed } from '../sim/rng';
+import { RunGoals, goalProgressText, goalText, rideSummary, runSetup, type RunProgress } from '../sim/meta';
 import { PX_PER_METRE, type Tuning } from '../tuning';
 import { Background } from '../render/background';
 import { TerrainView } from '../render/terrainView';
@@ -13,10 +14,11 @@ import { ObstacleView } from '../render/obstacleView';
 import { MountView } from '../render/mountView';
 import { MOUNT_NAMES, type MountKind } from '../sim/mounts';
 import { palette } from '../render/palette';
+import { applyBiome } from '../biomes';
 import { Hud } from '../ui/hud';
 import type { Tuner } from '../ui/tuner';
 import { loadBest, saveBest, type Menu } from '../ui/menu';
-import { addToWallet } from '../wallet';
+import { getProfile, persist } from '../profile';
 import type { Sfx } from '../audio';
 
 export interface GameContext {
@@ -26,12 +28,14 @@ export interface GameContext {
   sfx: Sfx;
   /** From ?seed=… — replay the same mountain every run. */
   fixedSeed: number | null;
-  /** From ?mount=… — start every run riding this. */
+  /** From ?mount=… — start every run riding this (instead of what perks and the shop give). */
   startMount: MountKind | null;
   debug: boolean;
   touch: boolean;
   /** OS "reduce motion" setting: no camera shake or flicker. */
   reducedMotion: boolean;
+  /** Biome id for the next run (title-screen picker, ?biome=…). */
+  biome: string;
 }
 
 /** World px visible vertically at zoom multiplier 1 (the design height). */
@@ -74,6 +78,12 @@ function damp(current: number, target: number, rate: number, dt: number): number
 
 export class PlayScene extends Phaser.Scene {
   private run!: Run;
+  /** The title screen's demo run: no upgrades, perks or goals. */
+  private demo = true;
+  /** The profile's goals as this run sees them (null for the demo). */
+  private goals: RunGoals | null = null;
+  /** How the run stood when the avalanche caught it. */
+  private final: RunProgress | null = null;
   private worldCam!: Phaser.Cameras.Scene2D.Camera;
   private uiCam!: Phaser.Cameras.Scene2D.Camera;
   private background!: Background;
@@ -111,7 +121,19 @@ export class PlayScene extends Phaser.Scene {
     this.state = play ? 'playing' : 'menu';
     this.best = loadBest();
     this.overTimer = 0;
-    this.run = new Run(seed, this.ctx.tuning, { avalanche: play, startMount: (play && this.ctx.startMount) || undefined });
+    // Repaint before any view is built: they read the palette as they draw.
+    const biome = applyBiome(this.ctx.biome);
+    const profile = getProfile();
+    this.demo = !play;
+    const setup = runSetup(profile, this.ctx.tuning, this.demo);
+    this.run = new Run(seed, setup.tuning, {
+      avalanche: play,
+      startMount: play && this.ctx.startMount ? this.ctx.startMount : setup.startMount,
+      table: biome.spawns,
+      scoreMultiplier: setup.scoreMultiplier,
+    });
+    this.goals = play ? new RunGoals(profile, () => new Rng(randomSeed())) : null;
+    this.final = null;
     this.simEvents = [];
     this.accumulator = 0;
     this.pressed = false;
@@ -243,6 +265,8 @@ export class PlayScene extends Phaser.Scene {
   update(time: number, deltaMs: number): void {
     const dt = Math.min(deltaMs / 1000, 0.1);
     const sk = this.run.skier;
+    // The tuning panel edits the base tuning: carry it over live, upgrades and all.
+    if (this.ctx.tuner.open) Object.assign(this.run.tuning, runSetup(getProfile(), this.ctx.tuning, this.demo).tuning);
 
     this.accumulator += dt;
     while (this.accumulator >= SIM_DT) {
@@ -254,6 +278,7 @@ export class PlayScene extends Phaser.Scene {
       this.pressed = false;
       this.accumulator -= SIM_DT;
     }
+    if (this.state === 'playing') this.checkGoals();
     if (this.state === 'playing' && this.run.caught) this.onCaught();
     if (this.state === 'over' && this.overTimer > 0 && (this.overTimer -= dt) <= 0) this.showGameOver();
 
@@ -312,8 +337,10 @@ export class PlayScene extends Phaser.Scene {
         avalancheM: gap / PX_PER_METRE,
         coins: this.run.stats.coins,
         stack: [...mounts.stack, ...(mounts.state === 'carried' ? (['eagle'] as const) : [])].map((k) => MOUNT_NAMES[k]),
-        eagle: mounts.state === 'carried' ? mounts.eagleTime / this.ctx.tuning.eagleTime : null,
-        fuel: mounts.stack[0] === 'snowmobile' ? mounts.fuel / this.ctx.tuning.snowmobileFuel : null,
+        eagle: mounts.state === 'carried' ? mounts.eagleTime / this.run.tuning.eagleTime : null,
+        fuel: mounts.stack[0] === 'snowmobile' ? mounts.fuel / this.run.tuning.snowmobileFuel : null,
+        rank: getProfile().rank,
+        rankMultiplier: this.run.scoreMultiplier,
       },
       dt,
     );
@@ -332,7 +359,24 @@ export class PlayScene extends Phaser.Scene {
     if (!this.ctx.reducedMotion) this.worldCam.shake(ms, intensity);
   }
 
+  private progress(): RunProgress {
+    return { stats: this.run.stats, metres: this.run.distancePx() / PX_PER_METRE, score: this.run.score, seconds: this.run.time };
+  }
+
+  /** Goals met mid-run: a toast and a chime, saved straight away. */
+  private checkGoals(): void {
+    if (!this.goals) return;
+    const done = this.goals.check(this.progress());
+    for (const g of done) {
+      const all = this.goals.profile.goals.every((x) => x.done);
+      this.hud.toast(all ? 'All 3 goals done! Rank up at the finish' : 'Goal complete!', goalText(g));
+      this.ctx.sfx.goal();
+    }
+    if (done.length) persist();
+  }
+
   private onCaught(): void {
+    this.final = this.progress();
     this.state = 'over';
     this.overTimer = CAUGHT_DELAY;
     this.releaseInput();
@@ -349,16 +393,29 @@ export class PlayScene extends Phaser.Scene {
     const newBest = score > this.best;
     if (newBest) saveBest(score);
     const st = this.run.stats;
-    addToWallet(st.coins);
+    const rank = getProfile().rank;
+    const summary = this.goals!.finish(this.final ?? this.progress());
+    persist();
+    if (summary.rankUp) this.ctx.sfx.rankUp();
     this.hud.setVisible(false);
     this.ctx.menu.showGameOver({
       score,
       metres: this.run.distancePx() / PX_PER_METRE,
       flips: st.flips,
-      coins: st.coins,
+      coins: summary.coins,
+      wallet: summary.wallet,
       bestAir: st.bestAirTime,
       best: Math.max(score, this.best),
       newBest,
+      rides: rideSummary(st),
+      rank,
+      rankMultiplier: this.run.scoreMultiplier,
+      goals: summary.goals.map((g) => ({ text: goalText(g), progress: goalProgressText(g), done: g.done, fresh: g.fresh })),
+      rankUp: summary.rankUp && {
+        rank: summary.rankUp.rank,
+        multiplier: summary.rankUp.multiplier,
+        unlocks: summary.rankUp.perks.map(({ name, text }) => ({ name, text })),
+      },
     });
   }
 

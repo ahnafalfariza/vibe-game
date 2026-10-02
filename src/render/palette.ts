@@ -1,7 +1,7 @@
 // One palette for the whole game. Cool, airy blues for the world so the
-// warm-coloured skier always pops. Keep new colours here, not inline.
+// warm-coloured yeti always pops. Keep new colours here, not inline.
 
-export const palette = {
+const ALPINE_COLORS = {
   skyTop: 0x5fa8e8,
   skyBottom: 0xd9f0ff,
   sun: 0xfff4d6,
@@ -13,6 +13,13 @@ export const palette = {
   forestMid: 0x6f96c4,
 
   cloud: 0xffffff,
+  /** HUD avalanche warning text: must read against the sky. */
+  warning: 0xef476f,
+
+  // ---- Night sky: only biomes with `night` / `aurora` (src/biomes.ts) ----
+  star: 0xffffff,
+  aurora: 0x6ff5c8,
+  auroraHigh: 0x9d8cff,
 
   snow: 0xf7fbff,
   snowRim: 0xffffff,
@@ -95,3 +102,17 @@ export function css(color: number): string {
 }
 
 export const FONT = 'Fredoka, "Trebuchet MS", system-ui, sans-serif';
+
+// ---- Biomes ----
+// `palette` is the colours of the biome being played: the alpine ones above
+// with the biome's overrides on top. src/biomes.ts swaps them in before a
+// scene builds its views, so views just read `palette.x` when they draw.
+
+export type PaletteKey = keyof typeof ALPINE_COLORS;
+
+export const palette: Record<PaletteKey, number> = { ...ALPINE_COLORS };
+
+/** Back to the alpine colours, then `overrides` on top. */
+export function applyPalette(overrides: Partial<Record<PaletteKey, number>>): void {
+  Object.assign(palette, ALPINE_COLORS, overrides);
+}

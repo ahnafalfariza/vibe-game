@@ -2,7 +2,8 @@ import Phaser from 'phaser';
 import { FONT, css, palette } from '../render/palette';
 
 // Screen-space UI, drawn by the un-zoomed UI camera. All sizes scale with
-// screen height (designed at 720px tall). Menus live in the DOM (menu.ts).
+// screen height (designed at 720px tall; width, if the screen is narrower
+// than that). Menus live in the DOM (menu.ts).
 
 export interface HudStats {
   score: number;
@@ -20,7 +21,15 @@ export interface HudStats {
   eagle: number | null;
   /** Snowmobile fuel left (0..1), while on one. */
   fuel: number | null;
+  rank: number;
+  /** The rank's base score multiplier. */
+  rankMultiplier: number;
 }
+
+/** Space between stacked popups, px at the design height. */
+const POPUP_GAP = 4;
+/** How long a goal toast stays up, ms. */
+const TOAST_HOLD = 2400;
 
 /** Show the avalanche distance below this many metres. */
 const WARN_METRES = 40;
@@ -44,6 +53,13 @@ export class Hud {
   private readonly ride: Phaser.GameObjects.Text;
   private readonly bars: Phaser.GameObjects.Graphics;
   private readonly barLabels: Phaser.GameObjects.Text[];
+  private readonly rank: Phaser.GameObjects.Text;
+  /** Floating callouts still on screen, oldest first. */
+  private readonly popups: { box: Phaser.GameObjects.Container; text: Phaser.GameObjects.Text; y: number }[] = [];
+  /** Goal toasts waiting their turn, and the parent of the one showing. */
+  private readonly toasts: [title: string, text: string][] = [];
+  private readonly toastRoot: Phaser.GameObjects.Container;
+  private toastBusy = false;
   private lastStack = '';
   private unit = 1;
   private width = 0;
@@ -65,7 +81,7 @@ export class Hud {
     this.score = add('0', { fontStyle: '600' });
     this.multiplier = add('', { fontStyle: '600', color: css(palette.beanie) }).setOrigin(0, 0.5);
     this.speed = add('', { fontStyle: '500' });
-    this.warning = add('', { fontStyle: '600', color: css(palette.scarf) });
+    this.warning = add('', { fontStyle: '600', color: css(palette.warning) });
     this.best = add('', { fontStyle: '500' }).setOrigin(1, 0.5);
     this.hint = add(touch ? 'Tap to jump  ·  hold to backflip' : 'Space / click to jump  ·  hold to backflip', { fontStyle: '600' }).setOrigin(0.5, 1);
     this.keys = add(touch ? '' : 'Esc  pause   ·   R  new run   ·   T  tune feel   ·   D  debug', { fontStyle: '500' }).setOrigin(1, 1).setAlpha(0.8);
@@ -78,13 +94,17 @@ export class Hud {
     this.bars = scene.add.graphics();
     layer.add(this.bars);
     this.barLabels = [add('', { fontStyle: '600' }).setOrigin(0, 0.5), add('', { fontStyle: '600' }).setOrigin(0, 0.5)];
-    this.items = [this.score, this.multiplier, this.speed, this.warning, this.best, this.hint, this.keys, this.coins, this.coinIcon, this.ride, this.bars, ...this.barLabels];
+    this.rank = add('', { fontStyle: '500' }).setOrigin(1, 0.5);
+    // Above the popups.
+    this.toastRoot = scene.add.container(0, 0).setDepth(1);
+    layer.add(this.toastRoot);
+    this.items = [this.score, this.multiplier, this.speed, this.warning, this.best, this.hint, this.keys, this.coins, this.coinIcon, this.ride, this.bars, ...this.barLabels, this.rank, this.toastRoot];
   }
 
   resize(width: number, height: number): void {
     this.width = width;
     this.height = height;
-    const u = (this.unit = height / 720);
+    const u = (this.unit = Math.min(width, height) / 720);
     const outline = (t: Phaser.GameObjects.Text, size: number, stroke = 6) =>
       t.setFontSize(Math.round(size * u)).setStroke(css(palette.ink), stroke * u);
     outline(this.score, 46, 8).setPosition(24 * u, 16 * u);
@@ -102,7 +122,8 @@ export class Hud {
     this.coinIcon.fillStyle(palette.coinRim, 1).fillCircle(0, 0, 10 * u);
     this.coinIcon.fillStyle(palette.coin, 1).fillCircle(0, 0, 7.5 * u);
     this.coinIcon.fillStyle(palette.coinShine, 1).fillEllipse(-3 * u, -3.5 * u, 3 * u, 5 * u);
-    outline(this.ride, 22, 5).setPosition(26 * u, 136 * u);
+    outline(this.rank, 20, 5).setPosition(width - 96 * u, 116 * u);
+    outline(this.ride, 22, 5).setPosition(26 * u, 152 * u);
     for (const t of this.barLabels) outline(t, 17, 4);
     outline(this.hint, 28, 6).setPosition(width / 2, height - 28 * u);
     outline(this.keys, 17, 4).setPosition(width - 20 * u, height - 16 * u);
@@ -120,6 +141,7 @@ export class Hud {
     this.score.setText(fmt(s.score));
     this.speed.setText(`${fmt(s.metres)} m   ${Math.round(s.kmh)} km/h`);
     this.best.setText(s.best > 0 ? `Best ${fmt(Math.max(s.best, s.score))}` : '');
+    this.rank.setText(s.rankMultiplier > 1 ? `Rank ${s.rank}  ·  score ×${s.rankMultiplier}` : '');
 
     this.multiplier.setText(s.multiplier > 1 ? `×${s.multiplier}` : '');
     this.multiplier.setPosition(this.score.x + this.score.width + 12 * u, this.score.y + this.score.height * 0.55);
@@ -150,7 +172,7 @@ export class Hud {
     for (const [label, left, color] of timers) {
       const text = this.barLabels[row];
       if (left === null) continue;
-      const y = (164 + 26 * row) * u;
+      const y = (180 + 26 * row) * u;
       text.setText(label).setPosition(26 * u, y).setVisible(true);
       const x0 = 26 * u + 64 * u;
       const w = 150 * u;
@@ -179,25 +201,85 @@ export class Hud {
     if (text !== null) this.debug.setText(text);
   }
 
-  /** Floating callout ("BACKFLIP!") at a screen position. */
+  /**
+   * Floating callout ("BACKFLIP!") at a screen position. Popups that fire
+   * together never overlap: older ones it would cover move up out of its way.
+   * They all rise the same way with age, so older ones stay ahead.
+   */
   popup(text: string, x: number, y: number, color: number, size = 34): void {
     const u = this.unit;
     const t = this.scene.add
-      .text(x, y, text, { fontFamily: FONT, fontStyle: '600', color: css(color) })
+      .text(0, 0, text, { fontFamily: FONT, fontStyle: '600', color: css(color) })
       .setFontSize(Math.round(size * u))
       .setStroke(css(palette.ink), 7 * u)
       .setOrigin(0.5)
       .setScale(0.6);
-    this.layer.add(t);
+    const box = this.scene.add.container(x, y, [t]);
+    this.layer.add(box);
+    const entry = { box, text: t, y };
+    // Lowest on screen first: each one pushed sits on top of the last.
+    let ceiling = y - t.height / 2 - POPUP_GAP * u;
+    const older = this.popups.filter((p) => Math.abs(p.box.x - x) < (p.text.width + t.width) / 2).sort((a, b) => b.y + b.text.y - (a.y + a.text.y));
+    for (const p of older) {
+      const bottom = p.y + p.text.y + p.text.height / 2;
+      if (bottom > ceiling) {
+        p.y -= bottom - ceiling;
+        this.scene.tweens.add({ targets: p.box, y: p.y, duration: 110, ease: 'Quad.Out' });
+      }
+      ceiling = Math.min(ceiling, p.y + p.text.y - p.text.height / 2 - POPUP_GAP * u);
+    }
+    this.popups.push(entry);
     this.scene.tweens.add({ targets: t, scale: 1, duration: 160, ease: 'Back.Out' });
     this.scene.tweens.add({
       targets: t,
-      y: y - 70 * u,
+      y: -70 * u,
       alpha: 0,
       delay: 450,
       duration: 650,
       ease: 'Quad.In',
-      onComplete: () => t.destroy(),
+      onComplete: () => {
+        this.popups.splice(this.popups.indexOf(entry), 1);
+        box.destroy();
+      },
+    });
+  }
+
+  /** A banner across the top ("Goal complete!" + what it was). Queued: one at a time. */
+  toast(title: string, text: string): void {
+    this.toasts.push([title, text]);
+    if (!this.toastBusy) this.nextToast();
+  }
+
+  private nextToast(): void {
+    const next = this.toasts.shift();
+    this.toastBusy = next !== undefined;
+    if (!next) return;
+    const u = this.unit;
+    const label = (s: string, size: number, color: number, y: number) =>
+      this.scene.add
+        .text(0, y, s, { fontFamily: FONT, fontStyle: '600', color: css(color) })
+        .setFontSize(Math.round(size * u))
+        .setStroke(css(palette.ink), 5 * u)
+        .setOrigin(0.5, 0);
+    const head = label(next[0], 20, palette.beanie, 12 * u);
+    const body = label(next[1], 26, 0xffffff, 12 * u + head.height);
+    const w = Math.max(head.width, body.width) + 48 * u;
+    const h = body.y + body.height + 12 * u;
+    const bg = this.scene.add.graphics();
+    bg.fillStyle(palette.ink, 0.88).fillRoundedRect(-w / 2, 0, w, h, 18 * u);
+    bg.lineStyle(3 * u, palette.beanie, 1).strokeRoundedRect(-w / 2, 0, w, h, 18 * u);
+    const box = this.scene.add.container(this.width / 2, -h - 8 * u, [bg, head, body]);
+    this.toastRoot.add(box);
+    this.scene.tweens.chain({
+      targets: box,
+      tweens: [
+        { y: 14 * u, duration: 280, ease: 'Back.Out' },
+        { y: -h - 8 * u, alpha: 0, delay: TOAST_HOLD, duration: 300, ease: 'Quad.In' },
+      ],
+      onComplete: () => {
+        box.destroy();
+        this.nextToast();
+      },
     });
   }
 

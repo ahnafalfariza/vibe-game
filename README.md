@@ -4,12 +4,12 @@ An endless downhill skiing game for the browser, inspired by *Ski Safari*.
 You play a yeti on skis, outrunning an avalanche.
 Portfolio / learning project. Not affiliated with the original.
 
-**Status: Phases 1–2 built (real-phone test pending).** Endless procedural
+**Status: Phases 1–3 built (real-phone test pending).** Endless procedural
 slope, jump, hold-to-backflip, landing judgement, crash and recover, an
 avalanche chasing you, rocks, cabins with rideable roofs, ice patches, coin
 clusters, mounts (penguin, eagle, snowmobile, polar bear), score with a trick
-multiplier, synthesised sound and music, and title / pause / game-over
-screens. See [`docs/research.md`](docs/research.md) for the
+multiplier, goals and ranks, a coin shop, two biomes (Alpine and Twilight
+Pines), synthesised sound and music, and title / pause / game-over screens. See [`docs/research.md`](docs/research.md) for the
 plan and [`docs/roadmap.md`](docs/roadmap.md) for progress.
 
 ## Run it
@@ -27,6 +27,9 @@ Handy URL parameters:
 | `?debug` | Show the debug overlay |
 | `?tune` | Open the tuning panel on load |
 | `?mount=penguin` | Start every run riding a mount (`penguin`, `eagle`, `snowmobile`, `bear`) |
+| `?biome=twilight` | Force a biome (`alpine`, `twilight`), even a locked one |
+| `?coins=5000` | Top the wallet up to at least this many coins (for testing the shop) |
+| `?profile=reset` | Wipe saved progress: coins, rank, goals, upgrades |
 
 ## Controls
 
@@ -59,6 +62,13 @@ Score is 1 point per metre plus trick points. A clean flip
 scores 100 (2 flips 300, 3 flips 600) and raises the multiplier by the
 number of flips, up to ×10. A sloppy landing or a crash resets it to ×1.
 
+You always have three **goals** (Goals on the title screen). Finish all three
+to rank up: each rank multiplies your whole score by another ×0.25, and some
+ranks unlock perks: rank 2 starts every run on a penguin, rank 3 unlocks the
+Twilight Pines biome, rank 5 brings mounts more often, rank 7 shortens
+wipeouts. Spend coins in the **Shop** on upgrades: head start, coin magnet,
+cluster boost, avalanche delay, eagle wings, bigger tank, sturdy landings.
+
 ## Tuning the feel
 
 Press **T** for a live panel of every feel constant (gravity, flip speed,
@@ -77,18 +87,20 @@ src/
     mounts.ts     The mount stack, shields, eagle flight, fuel, and per-mount feel
     run.ts        One run: fixed 120 Hz step, avalanche, stats
     score.ts      Trick points and the multiplier
+    meta.ts       Goals, ranks, perks and shop upgrades (pure rules)
     rng.ts        Seeded PRNG
   render/       Phaser views of the sim (terrain chunks, yeti, mounts, obstacles, avalanche, sky, particles)
   ui/           HUD, DOM menus (title / pause / game over) and the tuning panel
   audio.ts      Every sound and the music loop, synthesised with WebAudio (no audio files)
-  wallet.ts     Lifetime coin total in localStorage
+  profile.ts    Saved progress (coins, rank, goals, upgrades) in localStorage
+  biomes.ts     Biome palettes, backdrops and spawn tables
   scenes/       PlayScene wires input → sim → views, three cameras
   tuning.ts     Every feel number in one place
 tests/          Vitest unit tests for the sim
 scripts/
-  probe.ts      Headless bots that play the sim and report air time, landings, speed, avalanche survival
+  probe.ts      Headless bots that play the sim and report air time, landings, speed, survival, mounts, coins (BIOME)
   smoke.mjs     Headless Chromium smoke test (fails on console errors)
-  tour.mjs      Scripted play-through on a faked clock → screenshots/ (SEED, OBSTACLE_SEED)
+  tour.mjs      Scripted play-through on a faked clock → screenshots/ (SEED, OBSTACLE_SEED, BIOME)
 ```
 
 Why custom physics instead of Matter.js / Box2D, and why templates instead of

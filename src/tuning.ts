@@ -60,6 +60,8 @@ export interface Tuning {
   iceDrag: number;
   /** Speed added for grabbing every coin in a cluster, px/s. */
   coinClusterBoost: number;
+  /** Coin pickup reach: a little more than the drawn coin, so a near miss still counts, px. */
+  coinPickup: number;
   /** After getting back up from a crash, obstacles can't hit you for this long, s. */
   hitInvulnTime: number;
   /** Scales how often rocks, cabins and ice are placed (0 = none). */
@@ -136,6 +138,7 @@ export const DEFAULT_TUNING: Readonly<Tuning> = Object.freeze({
   iceFriction: 0.003,
   iceDrag: 0.4,
   coinClusterBoost: 300,
+  coinPickup: 28,
   hitInvulnTime: 0.8,
   obstacleDensity: 1,
   fallGravity: 1,

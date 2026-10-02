@@ -68,7 +68,8 @@ describe('Avalanche', () => {
 
   it('is off in a run without one', () => {
     const run = new Run(1, createTuning({ minSpeed: 0, maxSpeed: 0 }), { avalanche: false });
-    for (let i = 0; i < 120 * 20; i++) run.step(idle, []);
+    // A live avalanche reaches a skier standing still in well under a second.
+    for (let i = 0; i < 120 * 3; i++) run.step(idle, []);
     expect(run.caught).toBe(false);
   });
 });

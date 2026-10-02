@@ -10,13 +10,13 @@ Legend: ✅ done · 🟡 partial · ⬜ not started · ❓ decision needed
 
 ## Next up
 
-Phase 1 is built. Remaining Phase 1 items need a human:
+Phases 1–3 are built and deployed (Cloudflare Workers). What's left needs a
+human, then polish:
 
-1. **Deploy** (in progress separately). Static Vite build; Pages needs `base` in `vite.config.ts`.
-2. **Real-phone test** on the deployed URL: iOS audio unlock, touch latency, orientation.
-3. **Phase 0 gate sign-off:** a quick "is 60 s fun?" playtest.
-
-Phase 2 (mounts) is built too. Then Phase 3.
+1. **Real-phone test** on the deployed URL: iOS audio unlock, touch latency, orientation.
+2. **Playtest sign-off:** the Phase 0 "is 60 s fun?" gate, now with the full game.
+3. **Balance pass** from real play: goal tiers (mid-tier "ride 2 penguins" needs ~1,200 m runs), shop prices, cabin rarity (fairness rules leave few spots), mount spawn rate.
+4. **Known rough edges:** holding through a jump into an eagle often misses (the hitbox turns with the flip); tall stacks can bump a circling eagle; quitting a run early doesn't bank its coins; the portrait game-over card sits a little below the fold.
 
 Decided 2026-10-02: coins ship in Phase 1 (cluster speed bonus, lifetime
 wallet for the Phase 3 shop); the tough mount is a **polar bear**.
@@ -84,14 +84,14 @@ yeti, the yeti dropped out of the mount list.
 
 ---
 
-## Phase 3 — Meta progression ⬜
+## Phase 3 — Meta progression ✅
 
 | Feature | Status | Notes |
 |---|---|---|
-| Objectives (3 active, persistent) | ⬜ | e.g. "ride 3 penguins". |
-| Ranks → base multiplier, perks | ⬜ | e.g. start run on a mount. |
-| Coin shop with gameplay upgrades | ⬜ | Upgrades before cosmetics. |
-| Second biome | ⬜ | Palette + obstacle set + spawn table. |
+| Objectives (3 active, persistent) | ✅ | `src/sim/meta.ts` (pure rules) + `src/profile.ts` (localStorage, key `yeti-set-go.profile`, versioned; migrates the old `yeti-set-go.coins` wallet). 30 goals (23 single-run, 7 cumulative) over flips, air, speed, coins, clusters, distance, no-crash metres, score, and each mount. 5 difficulty tiers rising every two ranks. Three drawn from different families; mount goals only once your best run reaches that mount. Checked live: a mid-run toast and chime. |
+| Ranks → base multiplier, perks | ✅ | Finish all three goals to rank up at the end of the run. Rank N multiplies the whole score by 1 + 0.25·(N−1). Perks: rank 2 penguin start, rank 3 Twilight Pines, rank 5 mounts 1.5× as often, rank 7 wipeouts 30% shorter. |
+| Coin shop with gameplay upgrades | ✅ | Seven upgrades, 7,060 coins for everything (about 45 coins a run): head start (snowmobile, then + polar bear), coin magnet, cluster boost, avalanche delay, eagle wings, bigger tank, sturdy landings. Applied as tuning overrides and start mounts; never to the title-screen demo run. `?coins=` and `?profile=reset` for testing. |
+| Second biome | ✅ | **Twilight Pines** (`src/biomes.ts`): dusk palette, moon, stars, aurora, denser pines, glowing cabin windows, fewer rocks, 3× cabins, longer ice. Biomes are data: palette overrides, backdrop options and a spawn table. Picked on the title screen (‹ ›), remembered in `yeti-set-go.biome`, locked until rank 3, `?biome=` to force. |
 
 ---
 
@@ -104,7 +104,7 @@ app-store builds (Capacitor only if publishing ever matters).
 
 ## Not on any phase yet (candidates to add)
 
-- **Hosting / shareable link** (Vercel or GitHub Pages). No deploy set up. Cheap, and needed for the real-phone test and portfolio.
+- ~~Hosting / shareable link~~ done: Cloudflare Workers, with a preview URL per PR (`wrangler.jsonc`).
 - ~~Pooling for obstacles/coins~~ done with the obstacles.
 - **Crash ragdoll** via tween, `planck` only if worth it. The existing tumble covers it for now.
 - ~~Reduced-motion setting~~ done: follows the OS `prefers-reduced-motion` (no shake, no flicker).
@@ -118,4 +118,4 @@ app-store builds (Capacitor only if publishing ever matters).
 3. ~~Obstacles first, coins later~~ both done.
 4. ~~Move coins to Phase 3~~ kept in Phase 1.
 5. ~~Pick the tough-mount replacement~~ polar bear.
-6. **Add deploy to Phase 1** (in progress).
+6. ~~Add deploy to Phase 1~~ done (Cloudflare Workers).
