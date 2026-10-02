@@ -1,5 +1,5 @@
 // Headless feel probe: run the simulation with simple bots and print stats.
-// Usage: npx vite-node scripts/probe.ts  (or via vitest's runner: npx tsx)
+// Usage: bun run probe
 import { Run, SIM_DT } from '../src/sim/run';
 import { createTuning } from '../src/tuning';
 import type { SkierEvent } from '../src/sim/skier';

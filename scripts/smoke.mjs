@@ -1,6 +1,6 @@
 // Smoke test: load the built game in headless Chromium, play a few seconds
 // (jump + hold for a flip), take screenshots, and fail on console errors.
-// Usage: npm run build && node scripts/smoke.mjs [url]
+// Usage: bun run build && node scripts/smoke.mjs [url]
 import { chromium } from 'playwright';
 import { spawn } from 'node:child_process';
 import { mkdirSync, existsSync } from 'node:fs';
@@ -11,7 +11,7 @@ mkdirSync(outDir, { recursive: true });
 let server = null;
 let url = process.argv[2];
 if (!url) {
-  server = spawn('npx', ['vite', 'preview', '--port', '4173', '--strictPort'], { stdio: 'ignore' });
+  server = spawn('bunx', ['vite', 'preview', '--port', '4173', '--strictPort'], { stdio: 'ignore' });
   url = 'http://localhost:4173/?seed=7';
   await new Promise((r) => setTimeout(r, 2500));
 }

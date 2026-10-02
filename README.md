@@ -10,8 +10,8 @@ or score yet. See [`docs/research.md`](docs/research.md) for the plan.
 ## Run it
 
 ```bash
-npm install
-npm run dev        # http://localhost:5173 — also reachable from your phone on the same Wi-Fi
+bun install
+bun run dev        # http://localhost:5173 — also reachable from your phone on the same Wi-Fi
 ```
 
 Handy URL parameters:
@@ -68,8 +68,8 @@ noise for the terrain: see [`docs/research.md`](docs/research.md).
 ## Checks
 
 ```bash
-npm test           # unit tests
-npm run typecheck
-npm run probe      # headless feel stats
-npm run build && npm run smoke   # browser smoke test
+bun run test       # unit tests
+bun run typecheck
+bun run probe      # headless feel stats
+bun run build && bun run smoke   # browser smoke test
 ```

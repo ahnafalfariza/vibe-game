@@ -1,12 +1,12 @@
 // Visual tour: drives the game on a faked clock (so slow headless rendering
 // doesn't matter) and screenshots key moments: a flip, a landing, big air.
-// Usage: npm run build && node scripts/tour.mjs
+// Usage: bun run build && node scripts/tour.mjs
 import { chromium } from 'playwright';
 import { spawn } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
 
 mkdirSync('screenshots', { recursive: true });
-const server = spawn('npx', ['vite', 'preview', '--port', '4175', '--strictPort'], { stdio: 'ignore' });
+const server = spawn('bunx', ['vite', 'preview', '--port', '4175', '--strictPort'], { stdio: 'ignore' });
 await new Promise((r) => setTimeout(r, 2500));
 const browser = await chromium.launch({
   executablePath: '/opt/pw-browsers/chromium',
