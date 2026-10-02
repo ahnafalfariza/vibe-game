@@ -12,6 +12,8 @@ export interface HudStats {
   best: number;
   /** Metres to the avalanche. */
   avalancheM: number;
+  /** Coins this run. */
+  coins: number;
 }
 
 /** Show the avalanche distance below this many metres. */
@@ -20,8 +22,11 @@ const WARN_METRES = 40;
 const fmt = (n: number) => Math.floor(n).toLocaleString('en-US');
 
 export class Hud {
-  private readonly items: Phaser.GameObjects.Text[];
+  private readonly items: { setVisible(visible: boolean): unknown }[];
   private readonly score: Phaser.GameObjects.Text;
+  private readonly coins: Phaser.GameObjects.Text;
+  private readonly coinIcon: Phaser.GameObjects.Graphics;
+  private lastCoins = 0;
   private readonly multiplier: Phaser.GameObjects.Text;
   private readonly speed: Phaser.GameObjects.Text;
   private readonly warning: Phaser.GameObjects.Text;
@@ -55,7 +60,10 @@ export class Hud {
     this.keys = add(touch ? '' : 'Esc  pause   ·   R  new run   ·   T  tune feel   ·   D  debug', { fontStyle: '500' }).setOrigin(1, 1).setAlpha(0.8);
     this.debug = add('', { fontFamily: 'ui-monospace, Menlo, Consolas, monospace', color: css(palette.ink) }).setOrigin(0, 1);
     this.debug.setVisible(false);
-    this.items = [this.score, this.multiplier, this.speed, this.warning, this.best, this.hint, this.keys];
+    this.coins = add('0', { fontStyle: '600', color: css(palette.coin) }).setOrigin(1, 0.5);
+    this.coinIcon = scene.add.graphics();
+    layer.add(this.coinIcon);
+    this.items = [this.score, this.multiplier, this.speed, this.warning, this.best, this.hint, this.keys, this.coins, this.coinIcon];
   }
 
   resize(width: number, height: number): void {
@@ -70,6 +78,15 @@ export class Hud {
     outline(this.warning, 24, 6).setPosition(26 * u, 100 * u);
     // Left of the (DOM) pause button.
     outline(this.best, 22, 5).setPosition(width - 96 * u, 46 * u);
+    // Coins under it: a little coin, its count to the left.
+    const iconX = width - 124 * u;
+    const iconY = 82 * u;
+    outline(this.coins, 24, 6).setPosition(iconX - 20 * u, iconY);
+    this.coinIcon.clear().setPosition(iconX, iconY);
+    this.coinIcon.fillStyle(palette.ink, 1).fillCircle(0, 0, 13 * u);
+    this.coinIcon.fillStyle(palette.coinRim, 1).fillCircle(0, 0, 10 * u);
+    this.coinIcon.fillStyle(palette.coin, 1).fillCircle(0, 0, 7.5 * u);
+    this.coinIcon.fillStyle(palette.coinShine, 1).fillEllipse(-3 * u, -3.5 * u, 3 * u, 5 * u);
     outline(this.hint, 28, 6).setPosition(width / 2, height - 28 * u);
     outline(this.keys, 17, 4).setPosition(width - 20 * u, height - 16 * u);
     this.debug.setFontSize(Math.round(14 * u)).setPosition(16 * u, height - 64 * u);
@@ -93,6 +110,12 @@ export class Hud {
       this.scene.tweens.add({ targets: this.multiplier, scale: { from: 1.6, to: 1 }, duration: 260, ease: 'Back.Out' });
     }
     this.lastMultiplier = s.multiplier;
+
+    if (s.coins !== this.lastCoins) {
+      this.coins.setText(String(s.coins));
+      if (s.coins > this.lastCoins) this.scene.tweens.add({ targets: this.coinIcon, scale: { from: 1.35, to: 1 }, duration: 180, ease: 'Quad.Out' });
+      this.lastCoins = s.coins;
+    }
 
     const warn = s.avalancheM < WARN_METRES;
     this.warning.setText(warn ? `Avalanche! ${Math.max(0, Math.floor(s.avalancheM))} m` : '');

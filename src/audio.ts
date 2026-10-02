@@ -184,6 +184,29 @@ export class Sfx {
     src.start(t, Math.random());
     src.stop(t + dur + 0.05);
   }
+
+  /** Coin pickup: a bright blip that climbs the scale with each coin of a cluster. */
+  coin(index: number): void {
+    const f = 987.77 * 2 ** (SCALE[Math.min(index, SCALE.length - 1)] / 12);
+    this.tone('square', f, f, 0.07, 0.05);
+    this.tone('sine', f * 2, f * 2, 0.09, 0.08, 0.02);
+  }
+
+  /** Every coin of a cluster: a quick rising jingle. */
+  coinCluster(): void {
+    [0, 4, 7, 12, 16].forEach((semi, i) => {
+      const f = 1046.5 * 2 ** (semi / 12);
+      this.tone('triangle', f, f, 0.16, 0.16, i * 0.06);
+      this.tone('sine', f * 2, f * 2, 0.12, 0.05, i * 0.06);
+    });
+  }
+
+  /** Ran into a rock (stony knock) or a cabin (woody crunch). */
+  thud(obstacle: 'rock' | 'cabin'): void {
+    this.tone('sine', 120, 45, 0.25, 0.7);
+    if (obstacle === 'rock') this.noiseBurst(0.12, 'bandpass', 1800, 600, 0.45);
+    else this.noiseBurst(0.35, 'bandpass', 700, 250, 0.6);
+  }
 }
 
 /** Quick attack, exponential decay. */
