@@ -33,6 +33,11 @@ try {
     page.on('response', (r) => r.status() >= 400 && errors.push(`[${name}] HTTP ${r.status()} ${r.url()}`));
     await page.goto(url);
     await page.waitForFunction(() => window.__game?.scene?.getScene('play')?.run, null, { timeout: 15000 });
+    await page.waitForTimeout(1000);
+    await page.screenshot({ path: `${outDir}/${name}-0-title.png` });
+    // Title screen → play.
+    await page.click('#overlay [data-act="play"]');
+    await page.waitForFunction(() => window.__game.scene.getScene('play').state === 'playing', null, { timeout: 5000 });
     await page.waitForTimeout(1500);
     await page.screenshot({ path: `${outDir}/${name}-1-start.png` });
     // Jump and hold for a backflip.
@@ -62,6 +67,33 @@ try {
       return { cameras: scene.cameras.cameras.length, simTime: scene.run.time };
     });
     if (after.cameras !== 3 || after.simTime > 5) errors.push(`[${name}] bad restart ${JSON.stringify(after)}`);
+    // Pause freezes the sim; restart from the pause menu starts a fresh run.
+    const scene = () => page.evaluate(() => {
+      const s = window.__game.scene.getScene('play');
+      return { state: s.state, simTime: s.run.time, screen: document.querySelector('#overlay .screen:not([hidden])')?.className ?? null };
+    });
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(500);
+    const paused = await scene();
+    await page.waitForTimeout(500);
+    const stillPaused = await scene();
+    await page.screenshot({ path: `${outDir}/${name}-4-paused.png` });
+    if (paused.state !== 'paused' || stillPaused.simTime !== paused.simTime) errors.push(`[${name}] pause did not freeze ${JSON.stringify([paused, stillPaused])}`);
+    await page.click('#overlay .pause [data-act="restart"]');
+    await page.waitForTimeout(800);
+    const restarted = await scene();
+    if (restarted.state !== 'playing' || restarted.simTime > 2 || restarted.screen !== null) errors.push(`[${name}] bad restart from pause ${JSON.stringify(restarted)}`);
+    // Let the avalanche catch the skier: game-over screen, then back to the title.
+    await page.evaluate(() => {
+      const run = window.__game.scene.getScene('play').run;
+      run.avalancheX = run.skier.x + 10;
+    });
+    await page.waitForFunction(() => document.querySelector('#overlay .over:not([hidden])'), null, { timeout: 15000 });
+    await page.screenshot({ path: `${outDir}/${name}-5-over.png` });
+    await page.click('#overlay .over [data-act="home"]');
+    await page.waitForTimeout(800);
+    const home = await scene();
+    if (home.state !== 'menu' || !home.screen?.includes('title')) errors.push(`[${name}] bad return to title ${JSON.stringify(home)}`);
     await page.close();
   }
 } finally {
