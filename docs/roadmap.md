@@ -16,7 +16,7 @@ human, then polish:
 1. **Real-phone test** on the deployed URL: iOS audio unlock, touch latency, orientation.
 2. **Playtest sign-off:** the Phase 0 "is 60 s fun?" gate, now with the full game.
 3. **Balance pass** from real play: goal tiers (mid-tier "ride 2 penguins" needs ~1,200 m runs), shop prices, cabin rarity (fairness rules leave few spots), mount spawn rate.
-4. **Known rough edges:** holding through a jump into an eagle often misses (the hitbox turns with the flip). Fixed: tall stacks no longer bump a circling eagle (only a jump grabs it); quitting a run (restart, main menu, closing the tab) banks its coins and goal progress; the portrait game-over card fits short phones down to 360×480.
+4. **Known rough edges:** all fixed. Holding through a jump reaches an eagle; only a jump grabs one (a tall stack riding underneath doesn't); quitting a run (restart, main menu, closing the tab) banks its coins and goal progress; the portrait game-over card fits short phones down to 360×480.
 
 Decided 2026-10-02: coins ship in Phase 1 (cluster speed bonus, lifetime
 wallet for the Phase 3 shop); the tough mount is a **polar bear**.

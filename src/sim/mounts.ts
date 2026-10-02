@@ -235,7 +235,11 @@ export class Mounts {
       // Only a jump reaches an eagle: a tall stack riding underneath doesn't.
       if (m.kind === 'eagle' && skier.mode !== 'air') continue;
       const s = MOUNTS[m.kind];
-      if (skier.touches(m.x, m.y - s.up, s.r)) {
+      // Mid-backflip the body hangs below the feet, out of an eagle's reach
+      // overhead: let it grab as if you were upright, so holding through the
+      // jump reaches as far as a tap.
+      const upright = m.kind === 'eagle' && skier.touches(m.x, m.y - s.up, s.r, 0);
+      if (upright || skier.touches(m.x, m.y - s.up, s.r)) {
         m.taken = true;
         this.board(m.kind, skier, events);
       }
