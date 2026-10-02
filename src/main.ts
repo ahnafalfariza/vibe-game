@@ -42,6 +42,7 @@ async function main(): Promise<void> {
     fixedSeed: seedParam !== null && Number.isFinite(Number(seedParam)) ? Number(seedParam) >>> 0 : null,
     debug: params.has('debug'),
     touch,
+    reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches,
   };
 
   // Render at device resolution (capped at 2x) and scale the canvas down with

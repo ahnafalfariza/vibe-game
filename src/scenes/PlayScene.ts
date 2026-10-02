@@ -26,6 +26,8 @@ export interface GameContext {
   fixedSeed: number | null;
   debug: boolean;
   touch: boolean;
+  /** OS "reduce motion" setting: no camera shake or flicker. */
+  reducedMotion: boolean;
 }
 
 /** World px visible vertically at zoom multiplier 1 (the design height). */
@@ -250,8 +252,10 @@ export class PlayScene extends Phaser.Scene {
     this.terrainView.update(this.view.x - halfW, this.view.x + halfW);
     this.obstacleView.update(this.view.x - halfW, this.view.x + halfW, dt);
     this.skierView.update(x, y, angle, sk.vx, sk.vy, sk.mode === 'crash', dt);
-    // Flicker while obstacles can't knock you down (just after getting up).
-    this.skierView.container.setAlpha(sk.invulnTimer > 0 && sk.mode !== 'crash' && Math.floor(time / 70) % 2 ? 0.35 : 1);
+    // Flicker while obstacles can't knock you down (just after getting up);
+    // a steady fade instead with reduced motion.
+    const invuln = sk.invulnTimer > 0 && sk.mode !== 'crash';
+    this.skierView.container.setAlpha(!invuln ? 1 : this.ctx.reducedMotion ? 0.6 : Math.floor(time / 70) % 2 ? 0.35 : 1);
     // No snow kicked up on ice: the skis go quiet and slick (you can still jump as normal).
     const onIce = sk.mode === 'ground' && this.run.spawner.sample(sk.x).ice === true;
     this.spray.update(x, y, sk.velocity, sk.mode === 'ground' && !onIce && !this.run.caught, dt);
@@ -290,6 +294,10 @@ export class PlayScene extends Phaser.Scene {
     this.updateDebug(dt, zoom);
   }
 
+  private shake(ms: number, intensity: number): void {
+    if (!this.ctx.reducedMotion) this.worldCam.shake(ms, intensity);
+  }
+
   private onCaught(): void {
     this.state = 'over';
     this.overTimer = CAUGHT_DELAY;
@@ -297,7 +305,7 @@ export class PlayScene extends Phaser.Scene {
     this.skierView.container.setVisible(false);
     const sk = this.run.skier;
     this.spray.burst(sk.x, sk.y, 40);
-    this.worldCam.shake(500, 0.012);
+    this.shake(500, 0.012);
     this.ctx.sfx.caught();
     this.ctx.menu.hideAll();
   }
@@ -413,7 +421,7 @@ export class PlayScene extends Phaser.Scene {
         if (e.quality === 'crash') {
           this.hud.popup('Wipeout!', sx, popY, palette.scarf, 40);
           this.spray.burst(e.x, e.y, 30);
-          this.worldCam.shake(260, 0.006);
+          this.shake(260, 0.006);
           sfx?.crash();
         } else if (e.quality === 'sloppy') {
           this.hud.popup(e.flips > 0 ? flipName(e.flips) + ' — sloppy' : 'Sloppy', sx, popY, 0xffd6a5, 26);
@@ -434,10 +442,10 @@ export class PlayScene extends Phaser.Scene {
         sfx?.thud(e.obstacle);
         if (e.crashed) {
           this.hud.popup('Wipeout!', sx, sy - 150 * u, palette.scarf, 40);
-          this.worldCam.shake(320, 0.009);
+          this.shake(320, 0.009);
           sfx?.crash();
         } else {
-          this.worldCam.shake(200, 0.005);
+          this.shake(200, 0.005);
         }
       } else if (e.type === 'coin') {
         this.obstacleView.collect(e.x, e.y);
