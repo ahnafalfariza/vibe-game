@@ -151,7 +151,7 @@ const ROCK_HIT = 0.8;
 /** Drawn coin radius, px. */
 export const COIN_R = 14;
 /** Pickup reach: a little more than the drawn coin, so a near miss still counts, px. */
-const COIN_PICKUP = 22;
+const COIN_PICKUP = 28;
 const COIN_SPACING = 80;
 /** Coins float at the body's middle so riding (or flying) through them collects them, px. */
 const COIN_LIFT = 34;
@@ -168,6 +168,8 @@ interface Flight {
   air: number;
   /** Flight path as [x, y, x, y, …]. */
   path: number[];
+  /** Started with a jump (the lip ghost's), not just rolling off a crest. */
+  jumped: boolean;
   /** A coin arc already follows it. */
   arced: boolean;
 }
@@ -300,7 +302,7 @@ export class Spawner implements Ground {
     const jump = g.spec.name === 'lip' && s.mode === 'ground' && s.angle < LIP_ANGLE;
     s.step(GHOST_DT, { held: false, pressed: jump }, this.scratch);
     if (s.mode === 'air') {
-      g.flight ??= { ghost: g.spec, x0: s.x, x1: s.x, speed: 0, air: 0, path: [], arced: false };
+      g.flight ??= { ghost: g.spec, x0: s.x, x1: s.x, speed: 0, air: 0, path: [], jumped: jump, arced: false };
       g.flight.path.push(s.x, s.y);
     } else if (g.flight) {
       g.flight.x1 = s.x;
@@ -436,9 +438,17 @@ export class Spawner implements Ground {
         return;
       }
       case 'coinArc': {
-        // Follow one of the idle ghost's longer flights from a takeoff on this feature.
+        // Follow a longer flight from a takeoff on this feature: the idle
+        // ghost's (ride the jump to get them) or a jump at the lip (a higher
+        // arc that you only get by jumping).
         const options = this.flights.filter(
-          (fl) => fl.ghost.name === 'idle' && !fl.arced && fl.x0 >= f.x0 && fl.x0 < f.x1 && fl.air >= ARC_MIN_AIR && this.coinsFit(fl.x0, fl.x1),
+          (fl) =>
+            (fl.ghost.name === 'idle' || fl.jumped) &&
+            !fl.arced &&
+            fl.x0 >= f.x0 &&
+            fl.x0 < f.x1 &&
+            fl.air >= ARC_MIN_AIR &&
+            this.coinsFit(fl.x0, fl.x1),
         );
         if (options.length === 0) return;
         const flight = options[r.int(0, options.length - 1)];
