@@ -14,6 +14,8 @@ export interface MenuActions {
   home(): void;
   /** Returns the new muted state. */
   toggleMute(): boolean;
+  /** Returns the new music-on state. */
+  toggleMusic(): boolean;
   click(): void;
 }
 
@@ -42,6 +44,7 @@ export class Menu {
     private readonly actions: MenuActions,
     touch: boolean,
     muted: boolean,
+    music: boolean,
   ) {
     const controls = touch ? 'Tap to jump · hold to backflip' : 'Space to jump · hold to backflip · Esc to pause';
     this.root = document.createElement('div');
@@ -54,14 +57,14 @@ export class Menu {
         <button class="btn primary big" data-act="play">Play</button>
         <p class="best"></p>
         <p class="controls">${controls}</p>
-        <button class="btn small" data-act="mute"></button>
+        <div class="toggles"><button class="btn small" data-act="mute"></button><button class="btn small" data-act="music"></button></div>
       </section>
       <section class="screen pause" hidden>
         <h2>Paused</h2>
         <button class="btn primary" data-act="resume">Resume</button>
         <button class="btn" data-act="restart">Restart</button>
         <button class="btn" data-act="home">Main menu</button>
-        <button class="btn small" data-act="mute"></button>
+        <div class="toggles"><button class="btn small" data-act="mute"></button><button class="btn small" data-act="music"></button></div>
       </section>
       <section class="screen over" hidden>
         <h2>Caught by the avalanche!</h2>
@@ -77,12 +80,14 @@ export class Menu {
     this.screens = { title: q('.title'), pause: q('.pause'), over: q('.over') };
     this.pauseButton = q('.pause-btn');
     this.setMuted(muted);
+    this.setMusic(music);
 
     this.root.addEventListener('click', (e) => {
       const act = (e.target as HTMLElement).closest<HTMLElement>('[data-act]')?.dataset.act;
       if (!act) return;
       this.actions.click();
       if (act === 'mute') this.setMuted(this.actions.toggleMute());
+      else if (act === 'music') this.setMusic(this.actions.toggleMusic());
       else if (act === 'play' || act === 'pause' || act === 'resume' || act === 'restart' || act === 'home') this.actions[act]();
     });
     // Keep presses on the overlay from also counting as a jump.
@@ -107,6 +112,10 @@ export class Menu {
 
   private setMuted(muted: boolean): void {
     for (const b of this.root.querySelectorAll<HTMLElement>('[data-act="mute"]')) b.textContent = muted ? 'Sound: off' : 'Sound: on';
+  }
+
+  private setMusic(on: boolean): void {
+    for (const b of this.root.querySelectorAll<HTMLElement>('[data-act="music"]')) b.textContent = on ? 'Music: on' : 'Music: off';
   }
 
   private show(screen: Screen | null): void {

@@ -274,6 +274,7 @@ export class PlayScene extends Phaser.Scene {
       grounded: sk.mode !== 'air' && !this.run.caught,
       danger,
       playing: this.state !== 'menu',
+      caught: this.run.caught,
     });
     this.updateDebug(dt, zoom);
   }

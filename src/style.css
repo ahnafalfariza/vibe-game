@@ -175,6 +175,11 @@ body {
   box-shadow: 0 3px 0 var(--ink);
 }
 
+.toggles {
+  display: flex;
+  gap: 10px;
+}
+
 .pause-btn {
   position: fixed;
   top: max(12px, env(safe-area-inset-top));
