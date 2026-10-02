@@ -2,7 +2,7 @@
 // the canvas: real buttons are crisp, keyboard-focusable and easy to style,
 // and they swallow taps so menu clicks never reach the game.
 
-const BEST_KEY = 'selancar-ahay.best';
+const BEST_KEY = 'yeti-set-go.best';
 
 export type Screen = 'title' | 'pause' | 'over';
 
@@ -49,7 +49,7 @@ export class Menu {
     this.root.innerHTML = `
       <button class="pause-btn" data-act="pause" aria-label="Pause" hidden><span></span><span></span></button>
       <section class="screen title" hidden>
-        <h1>Selancar Ahay</h1>
+        <h1>Yeti, Set, Go!</h1>
         <p class="tagline">Outrun the avalanche. Flip for points.</p>
         <button class="btn primary big" data-act="play">Play</button>
         <p class="best"></p>
