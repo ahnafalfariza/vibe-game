@@ -16,7 +16,7 @@ Phase 1 is built. Remaining Phase 1 items need a human:
 2. **Real-phone test** on the deployed URL: iOS audio unlock, touch latency, orientation.
 3. **Phase 0 gate sign-off:** a quick "is 60 s fun?" playtest.
 
-Then Phase 2 (mounts, with the polar bear as the tough mount) and Phase 3.
+Phase 2 (mounts) is built too. Then Phase 3.
 
 Decided 2026-10-02: coins ship in Phase 1 (cluster speed bonus, lifetime
 wallet for the Phase 3 shop); the tough mount is a **polar bear**.
@@ -67,20 +67,20 @@ Goal: a run that can be *lost*, with a reason to play again.
 
 ---
 
-## Phase 2 — The Safari (mounts) ⬜
+## Phase 2 — The Safari (mounts) ✅
 
 What makes this game more than Tiny Wings / Alto. Since the player *is* the
 yeti, the yeti dropped out of the mount list.
 
 | Feature | Status | Notes |
 |---|---|---|
-| Mount system: state machine + **stack** | ⬜ | Planned `sim/mounts.ts`. Snowmobile carries other mounts. |
-| Penguin | ⬜ | Glides further, flips faster, one-hit shield. |
-| Eagle | ⬜ | Grabs the yeti, flies high for limited time. |
-| Snowmobile | ⬜ | High top speed, carries stacked animals. |
-| Mount-as-shield rules | ⬜ | Hit drops top of stack instead of crashing. |
-| Polar bear (tough mount) | ⬜ | Smashes rocks and cabins. Fills the role left open by removing the yeti. |
-| Character art | ⬜ | Recraft (SVG + style ID) recommended once style locked; ~10–15 assets total. |
+| Mount system: state machine + **stack** | ✅ | `src/sim/mounts.ts`. Stack is at most snowmobile → one animal → yeti; a new animal swaps the old one off (it runs away), a snowmobile slides under the stack. State (on foot / riding / carried) is derived from the stack and eagle timer. Mounts change feel through one effective-tuning function; `skier.ts` only gained generic hooks (`lift`, `fallGravity`, `thrust`, carried flight). Mounts are a `mount` entry in the spawn table, first due around 370 / 810 / 1180 / 1530 m, then roughly every 600 m. Riding onto one scores 100–200 × multiplier. `?mount=<kind>` starts every run on that mount. |
+| Penguin | ✅ | Half ground and air drag, flips 1.3× faster, 0.85× gravity when falling. Shield. |
+| Eagle | ✅ | Carries the whole stack for 5 s: hold to climb, release to glide (110–520 px up). Ignores obstacles while flying. Not a shield. |
+| Snowmobile | ✅ | 15 s of fuel, minimum speed 750 px/s plus thrust, flips slower. Carries one animal; keeps it when the tank runs dry. Shield. |
+| Mount-as-shield rules | ✅ | A rock, cabin wall or crash landing knocks the top mount off instead: keep `sloppySpeedKeep`, invulnerability window, multiplier reset. |
+| Polar bear (tough mount) | ✅ | Rocks and cabins shatter (150 × multiplier) and the bear stays. Heavier: more friction, 0.8× jump. A crash landing still knocks it off. |
+| Character art | ✅ | Code-drawn in `src/render/mountView.ts`, same outline style as the yeti. HUD shows the stack plus eagle-flight and fuel bars. |
 
 ---
 

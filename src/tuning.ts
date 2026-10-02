@@ -64,6 +64,46 @@ export interface Tuning {
   hitInvulnTime: number;
   /** Scales how often rocks, cabins and ice are placed (0 = none). */
   obstacleDensity: number;
+  /** Gravity multiplier while falling (moving down). Mounts change it; 1 = plain. */
+  fallGravity: number;
+  /** Engine push along the ground, px/s². Mounts change it; 0 = none. */
+  thrust: number;
+  /** Speed kept when ploughing through an obstacle (a polar bear's smash) (0..1). */
+  smashSpeedKeep: number;
+
+  // ---- Mounts (sim/mounts.ts). Multipliers apply on top of the values above. ----
+  /** Scales how often mounts turn up (0 = none). */
+  mountDensity: number;
+  /** Penguin: × ground drag (lower = faster cruising). */
+  penguinDrag: number;
+  /** Penguin: × flip speed and spin-up. */
+  penguinFlip: number;
+  /** Penguin: × air drag (lower = glides further). */
+  penguinAirDrag: number;
+  /** Penguin: × gravity while falling. */
+  penguinFallGravity: number;
+  /** Eagle: how long it carries you, s. */
+  eagleTime: number;
+  /** Eagle: cruising speed while carrying you, horizontal px/s. */
+  eagleSpeed: number;
+  /** Eagle: climb rate while holding, relative to the mountainside, px/s. */
+  eagleClimb: number;
+  /** Eagle: glide sink rate when released, relative to the mountainside, px/s. */
+  eagleSink: number;
+  /** Snowmobile: seconds of fuel. */
+  snowmobileFuel: number;
+  /** Snowmobile: the engine never lets you drop below this, px/s. */
+  snowmobileMinSpeed: number;
+  /** Snowmobile: engine push along the ground, px/s². */
+  snowmobileThrust: number;
+  /** Snowmobile: × top speed. */
+  snowmobileTopSpeed: number;
+  /** Snowmobile: × flip speed and spin-up (heavy). */
+  snowmobileFlip: number;
+  /** Polar bear: × snow friction (heavy: slower to pick up speed). */
+  bearFriction: number;
+  /** Polar bear: × jump impulse (heavy: jumps lower). */
+  bearJump: number;
 }
 
 export const DEFAULT_TUNING: Readonly<Tuning> = Object.freeze({
@@ -98,6 +138,25 @@ export const DEFAULT_TUNING: Readonly<Tuning> = Object.freeze({
   coinClusterBoost: 300,
   hitInvulnTime: 0.8,
   obstacleDensity: 1,
+  fallGravity: 1,
+  thrust: 0,
+  smashSpeedKeep: 0.9,
+  mountDensity: 1,
+  penguinDrag: 0.5,
+  penguinFlip: 1.3,
+  penguinAirDrag: 0.5,
+  penguinFallGravity: 0.85,
+  eagleTime: 5,
+  eagleSpeed: 1300,
+  eagleClimb: 520,
+  eagleSink: 380,
+  snowmobileFuel: 15,
+  snowmobileMinSpeed: 750,
+  snowmobileThrust: 450,
+  snowmobileTopSpeed: 1.15,
+  snowmobileFlip: 0.75,
+  bearFriction: 2.5,
+  bearJump: 0.8,
 });
 
 export function createTuning(overrides: Partial<Tuning> = {}): Tuning {

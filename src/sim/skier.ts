@@ -9,6 +9,14 @@ export interface Ground {
 
 export type Obstacle = 'rock' | 'cabin';
 
+/**
+ * Asked just before a crash takes effect (`cause`: an obstacle, or a crash
+ * landing). 'shield': a mount takes the hit instead and you ride on.
+ * 'smash': a mount ploughs straight through the obstacle. null: crash.
+ * The mount system (sim/mounts.ts) supplies it; the skier knows nothing of mounts.
+ */
+export type Guard = (cause: Obstacle | 'landing') => 'shield' | 'smash' | null;
+
 // Custom skier physics — deliberately NOT a rigid-body engine. The terrain is
 // a height field, so the skier is either:
 //   • on the ground: a bead sliding along the curve (speed along the tangent),
@@ -35,10 +43,15 @@ export type SkierEvent =
       airTime: number;
       /** Angle between body and slope at touchdown, degrees. */
       errorDeg: number;
+      /** A crash landing a mount took instead (reported as sloppy, no flips). */
+      saved?: 'shield';
     }
   | { type: 'recover'; x: number; y: number }
-  /** Ran into an obstacle. `crashed` is false if already tumbling or still invulnerable (a cabin still smashes). */
-  | { type: 'hit'; x: number; y: number; obstacle: Obstacle; crashed: boolean };
+  /**
+   * Ran into an obstacle. `crashed` is false if already tumbling, still
+   * invulnerable, or `saved` by a mount (a cabin still smashes).
+   */
+  | { type: 'hit'; x: number; y: number; obstacle: Obstacle; crashed: boolean; saved?: 'shield' | 'smash' };
 
 export interface SkierInput {
   /** Button is currently down. */
@@ -89,6 +102,15 @@ const CRASH_FRICTION = 4;
 const WALL_STEP = 30;
 /** Clipping a roof edge by this much (plus one step of fall) still lands on it, px. */
 const EDGE_GRAB = 10;
+/** Carried flight keeps the feet between these heights above the ground, px. */
+const FLY_FLOOR = 110;
+const FLY_CEILING = 520;
+/** How quickly carried flight changes vertical speed, px/s². */
+const FLY_VY_ACCEL = 2600;
+/** How quickly carried flight eases to its cruising speed, px/s². */
+const FLY_VX_ACCEL = 900;
+/** Body tilt while carried, at most, rad. */
+const FLY_TILT = 0.35;
 
 /**
  * Body hitbox for obstacle and coin overlap: circles along the body, measured
@@ -116,13 +138,28 @@ export class Skier {
   crashTimer = 0;
   /** Obstacles can't knock you down while this runs (just after getting up). */
   invulnTimer = 0;
+  /**
+   * Held aloft (by an eagle): in the air, but hold climbs and release glides
+   * instead of flipping, and nothing can knock you down. See grab() / letGo().
+   */
+  carried = false;
+  /** Decides whether a would-be crash is a crash. Null: always is. */
+  guard: Guard | null = null;
+  /**
+   * Riding this far above the snow (on mounts), px. The body hitbox rides up
+   * with it, and a block underneath stands in for whatever you're riding.
+   */
+  lift = 0;
   private coyoteTimer = 0;
   private jumpBufferTimer = 0;
   private jumpedThisAir = false;
+  /** Ignore a hold carried over from flying until the button is let go once. */
+  private holdLatch = false;
 
   constructor(
     private readonly ground: Ground,
-    private readonly tuning: Tuning,
+    /** Read every step, so it can be swapped for one with mount modifiers applied. */
+    public tuning: Tuning,
     x = 0,
   ) {
     const s = ground.sample(x);
@@ -143,7 +180,7 @@ export class Skier {
 
   /** Can an obstacle knock you down right now? */
   get vulnerable(): boolean {
-    return this.mode !== 'crash' && this.invulnTimer <= 0;
+    return this.mode !== 'crash' && this.invulnTimer <= 0 && !this.carried;
   }
 
   /** Height of the feet above the snow (or roof) directly below, px. */
@@ -155,22 +192,33 @@ export class Skier {
   touches(x: number, y: number, r: number): boolean {
     const ux = Math.sin(this.angle);
     const uy = -Math.cos(this.angle);
-    for (const c of BODY) {
-      const dx = this.x + ux * c.up - x;
-      const dy = this.y + uy * c.up - y;
-      if (dx * dx + dy * dy < (c.r + r) * (c.r + r)) return true;
-    }
-    return false;
+    const hit = (up: number, cr: number) => {
+      const dx = this.x + ux * up - x;
+      const dy = this.y + uy * up - y;
+      return dx * dx + dy * dy < (cr + r) * (cr + r);
+    };
+    for (const c of BODY) if (hit(c.up + this.lift, c.r)) return true;
+    return this.lift > 0 && hit(this.lift / 2, Math.max(BODY[0].r, this.lift / 2));
   }
 
   /**
    * Run into an obstacle: the same tumble as a crash landing, unless already
-   * tumbling or invulnerable. `x` is where it happened (defaults to here).
+   * tumbling or invulnerable, or the guard saves you. `x` is where it
+   * happened (defaults to here). Returns how a mount saved you, if one did.
    */
-  hit(obstacle: Obstacle, events: SkierEvent[], x = this.x): void {
+  hit(obstacle: Obstacle, events: SkierEvent[], x = this.x): 'shield' | 'smash' | null {
     const t = this.tuning;
-    const crashed = this.vulnerable;
-    if (crashed) {
+    const saved = this.vulnerable ? (this.guard?.(obstacle) ?? null) : null;
+    const crashed = this.vulnerable && !saved;
+    if (saved) {
+      // Ride on, a bit slower; after losing a shield, a moment to recover.
+      const keep = saved === 'shield' ? t.sloppySpeedKeep : t.smashSpeedKeep;
+      if (this.mode === 'air') {
+        this.vx *= keep;
+        this.vy *= keep;
+      } else this.speed = clamp(this.speed * keep, t.minSpeed, t.maxSpeed);
+      if (saved === 'shield') this.invulnTimer = t.hitInvulnTime;
+    } else if (crashed) {
       if (this.mode === 'air') {
         // Knocked out of the air: drop onto the snow, keeping the along-slope speed.
         const s = this.ground.sample(this.x);
@@ -185,7 +233,31 @@ export class Skier {
       this.jumpBufferTimer = 0;
       this.angVel = 0;
     }
-    events.push({ type: 'hit', x, y: this.y, obstacle, crashed });
+    events.push(saved ? { type: 'hit', x, y: this.y, obstacle, crashed, saved } : { type: 'hit', x, y: this.y, obstacle, crashed });
+    return saved;
+  }
+
+  /** Picked up by an eagle: carried flight until letGo(). */
+  grab(): void {
+    if (this.mode !== 'air') this.leaveGround(this.x, this.y, this.vx, this.vy);
+    this.mode = 'air';
+    this.carried = true;
+    this.angVel = 0;
+    this.airRotation = 0;
+    this.jumpBufferTimer = 0;
+    this.crashTimer = 0;
+  }
+
+  /** Dropped mid-air, level and with a fresh air time: flips count from here. */
+  letGo(): void {
+    this.carried = false;
+    this.airTime = 0;
+    this.airRotation = 0;
+    this.angVel = 0;
+    this.jumpedThisAir = true;
+    this.coyoteTimer = 0;
+    this.jumpBufferTimer = 0;
+    this.holdLatch = true;
   }
 
   /** A burst of speed along the direction of travel (coin cluster bonus), px/s. */
@@ -203,8 +275,39 @@ export class Skier {
 
   step(dt: number, input: SkierInput, events: SkierEvent[]): void {
     this.invulnTimer -= dt;
-    if (this.mode === 'air') this.stepAir(dt, input, events);
+    if (this.holdLatch) {
+      if (input.held) input = { held: false, pressed: input.pressed };
+      else this.holdLatch = false;
+    }
+    if (this.carried) this.stepCarried(dt, input);
+    else if (this.mode === 'air') this.stepAir(dt, input, events);
     else this.stepGround(dt, input, events);
+  }
+
+  /**
+   * Carried flight: cruise at the carrier's speed; hold to climb, let go to
+   * glide down, relative to the mountainside. Stays between FLY_FLOOR and
+   * FLY_CEILING above the ground, and never lands.
+   */
+  private stepCarried(dt: number, input: SkierInput): void {
+    const t = this.tuning;
+    this.vx = approach(this.vx, t.eagleSpeed, FLY_VX_ACCEL * dt);
+    const s = this.ground.sample(this.x);
+    // Follow the mountain's general fall line, not every bump.
+    const trend = this.vx * t.mountainSlope;
+    this.vy = approach(this.vy, trend + (input.held ? -t.eagleClimb : t.eagleSink), FLY_VY_ACCEL * dt);
+    // Soft floor and ceiling: steer back within a fraction of a second.
+    const h = s.y - this.y;
+    const groundVy = s.dy * this.vx;
+    if (h < FLY_FLOOR) this.vy = Math.min(this.vy, groundVy - (FLY_FLOOR - h) * 8);
+    if (h > FLY_CEILING) this.vy = Math.max(this.vy, groundVy + (h - FLY_CEILING) * 8);
+    this.x += this.vx * dt;
+    this.y += this.vy * dt;
+    // Lean into the climb or the glide, gently.
+    const tilt = clamp(Math.atan2(this.vy - trend, this.vx), -FLY_TILT, FLY_TILT);
+    this.angle += wrapAngle(tilt - this.angle) * Math.min(1, 6 * dt);
+    this.angVel = 0;
+    this.airTime += dt;
   }
 
   private stepGround(dt: number, input: SkierInput, events: SkierEvent[]): void {
@@ -218,7 +321,7 @@ export class Skier {
     // Gravity along the slope, minus snow friction and drag. Ice is slick on both counts.
     const friction = (s.ice ? t.iceFriction : t.groundFriction) * (crashed ? CRASH_FRICTION : 1);
     const drag = t.groundDrag * (s.ice ? t.iceDrag : 1);
-    const accel = t.gravity * ty - friction * t.gravity * inv - drag * this.speed * Math.abs(this.speed);
+    const accel = t.gravity * ty - friction * t.gravity * inv - drag * this.speed * Math.abs(this.speed) + t.thrust;
     this.speed = clamp(this.speed + accel * dt, t.minSpeed, t.maxSpeed);
 
     if (crashed) {
@@ -284,7 +387,7 @@ export class Skier {
     this.coyoteTimer -= dt;
     this.jumpBufferTimer -= dt;
 
-    this.vy += t.gravity * dt;
+    this.vy += t.gravity * (this.vy > 0 ? t.fallGravity : 1) * dt;
     const drag = Math.max(0, 1 - t.airDrag * this.velocity * dt);
     this.vx *= drag;
     this.vy *= drag;
@@ -337,9 +440,15 @@ export class Skier {
     // Keep only the part of the velocity that runs along the slope.
     const along = this.vx * inv + this.vy * s.dy * inv;
 
-    const quality: LandingQuality =
+    let quality: LandingQuality =
       errorDeg <= t.cleanLandingDeg ? 'clean' : errorDeg <= t.crashLandingDeg ? 'sloppy' : 'crash';
+    // A mount can take a crash landing for you: then it's merely sloppy, and no flips count.
+    const saved = quality === 'crash' && this.guard?.('landing') === 'shield';
     const flips = quality === 'crash' ? 0 : Math.max(0, Math.round(-this.airRotation / TAU));
+    if (saved) {
+      quality = 'sloppy';
+      this.invulnTimer = t.hitInvulnTime;
+    }
 
     let speed = along;
     if (quality === 'clean') speed += t.flipBoost * flips;
@@ -356,7 +465,8 @@ export class Skier {
     } else {
       this.angle = slopeAngle;
     }
-    events.push({ type: 'land', x: this.x, y: this.y, quality, flips, airTime: this.airTime, errorDeg });
+    const e = { type: 'land', x: this.x, y: this.y, quality, flips, airTime: this.airTime, errorDeg } as const;
+    events.push(saved ? { ...e, saved: 'shield' } : e);
   }
 
   private jump(s: TerrainSample, events: SkierEvent[]): void {

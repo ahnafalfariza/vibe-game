@@ -14,6 +14,12 @@ export interface HudStats {
   avalancheM: number;
   /** Coins this run. */
   coins: number;
+  /** What the yeti is riding, bottom to top (an eagle carrying it last). */
+  stack: string[];
+  /** Eagle flight left (0..1), while carried. */
+  eagle: number | null;
+  /** Snowmobile fuel left (0..1), while on one. */
+  fuel: number | null;
 }
 
 /** Show the avalanche distance below this many metres. */
@@ -34,6 +40,11 @@ export class Hud {
   private readonly hint: Phaser.GameObjects.Text;
   private readonly keys: Phaser.GameObjects.Text;
   private readonly debug: Phaser.GameObjects.Text;
+  /** The mount stack, and timer bars for eagle flight and snowmobile fuel. */
+  private readonly ride: Phaser.GameObjects.Text;
+  private readonly bars: Phaser.GameObjects.Graphics;
+  private readonly barLabels: Phaser.GameObjects.Text[];
+  private lastStack = '';
   private unit = 1;
   private width = 0;
   private height = 0;
@@ -63,7 +74,11 @@ export class Hud {
     this.coins = add('0', { fontStyle: '600', color: css(palette.coin) }).setOrigin(1, 0.5);
     this.coinIcon = scene.add.graphics();
     layer.add(this.coinIcon);
-    this.items = [this.score, this.multiplier, this.speed, this.warning, this.best, this.hint, this.keys, this.coins, this.coinIcon];
+    this.ride = add('', { fontStyle: '600' }).setOrigin(0, 0.5);
+    this.bars = scene.add.graphics();
+    layer.add(this.bars);
+    this.barLabels = [add('', { fontStyle: '600' }).setOrigin(0, 0.5), add('', { fontStyle: '600' }).setOrigin(0, 0.5)];
+    this.items = [this.score, this.multiplier, this.speed, this.warning, this.best, this.hint, this.keys, this.coins, this.coinIcon, this.ride, this.bars, ...this.barLabels];
   }
 
   resize(width: number, height: number): void {
@@ -87,6 +102,8 @@ export class Hud {
     this.coinIcon.fillStyle(palette.coinRim, 1).fillCircle(0, 0, 10 * u);
     this.coinIcon.fillStyle(palette.coin, 1).fillCircle(0, 0, 7.5 * u);
     this.coinIcon.fillStyle(palette.coinShine, 1).fillEllipse(-3 * u, -3.5 * u, 3 * u, 5 * u);
+    outline(this.ride, 22, 5).setPosition(26 * u, 136 * u);
+    for (const t of this.barLabels) outline(t, 17, 4);
     outline(this.hint, 28, 6).setPosition(width / 2, height - 28 * u);
     outline(this.keys, 17, 4).setPosition(width - 20 * u, height - 16 * u);
     this.debug.setFontSize(Math.round(14 * u)).setPosition(16 * u, height - 64 * u);
@@ -116,6 +133,35 @@ export class Hud {
       if (s.coins > this.lastCoins) this.scene.tweens.add({ targets: this.coinIcon, scale: { from: 1.35, to: 1 }, duration: 180, ease: 'Quad.Out' });
       this.lastCoins = s.coins;
     }
+
+    // What you're riding, popping in when it changes; timer bars under it.
+    const stack = s.stack.join(' + ');
+    if (stack !== this.lastStack) {
+      this.ride.setText(stack ? `Riding: ${stack}` : '');
+      if (stack) this.scene.tweens.add({ targets: this.ride, scale: { from: 1.25, to: 1 }, duration: 220, ease: 'Back.Out' });
+      this.lastStack = stack;
+    }
+    this.bars.clear();
+    const timers = [
+      ['Flight', s.eagle, palette.eagleBeak],
+      ['Fuel', s.fuel, palette.sledBody],
+    ] as const;
+    let row = 0;
+    for (const [label, left, color] of timers) {
+      const text = this.barLabels[row];
+      if (left === null) continue;
+      const y = (164 + 26 * row) * u;
+      text.setText(label).setPosition(26 * u, y).setVisible(true);
+      const x0 = 26 * u + 64 * u;
+      const w = 150 * u;
+      const h = 12 * u;
+      // Flash when nearly out.
+      const low = left < 0.25 && Math.sin(this.time * 14) > 0;
+      this.bars.fillStyle(palette.ink, 0.75).fillRoundedRect(x0 - 3 * u, y - h / 2 - 3 * u, w + 6 * u, h + 6 * u, 6 * u);
+      this.bars.fillStyle(low ? 0xffffff : color, 1).fillRoundedRect(x0, y - h / 2, Math.max(h, w * left), h, 4 * u);
+      row++;
+    }
+    for (let i = row; i < this.barLabels.length; i++) this.barLabels[i].setVisible(false);
 
     const warn = s.avalancheM < WARN_METRES;
     this.warning.setText(warn ? `Avalanche! ${Math.max(0, Math.floor(s.avalancheM))} m` : '');

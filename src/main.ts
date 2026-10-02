@@ -7,6 +7,7 @@ import { createTuning } from './tuning';
 import { Tuner, loadSavedTuning } from './ui/tuner';
 import { Menu } from './ui/menu';
 import { Sfx } from './audio';
+import { MOUNT_KINDS, type MountKind } from './sim/mounts';
 
 async function main(): Promise<void> {
   // Make sure the UI font is ready before Phaser rasterises any text.
@@ -14,6 +15,7 @@ async function main(): Promise<void> {
 
   const params = new URLSearchParams(location.search);
   const seedParam = params.get('seed');
+  const mountParam = params.get('mount') as MountKind | null;
   const tuning = createTuning(loadSavedTuning());
 
   let game: Phaser.Game | null = null;
@@ -40,6 +42,7 @@ async function main(): Promise<void> {
       sfx.musicOn,
     ),
     fixedSeed: seedParam !== null && Number.isFinite(Number(seedParam)) ? Number(seedParam) >>> 0 : null,
+    startMount: mountParam !== null && MOUNT_KINDS.includes(mountParam) ? mountParam : null,
     debug: params.has('debug'),
     touch,
     reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches,

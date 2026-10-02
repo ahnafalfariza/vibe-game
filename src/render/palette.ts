@@ -60,6 +60,33 @@ export const palette = {
   coin: 0xffcf3f,
   coinRim: 0xe2961c,
   coinShine: 0xfff6cf,
+
+  // ---- Mounts (render/mountView.ts). Same dark indigo outline as the yeti. ----
+  penguinBack: 0x2c3566,
+  penguinBackLight: 0x45508a,
+  penguinBelly: 0xffffff,
+  penguinBeak: 0xffa62b,
+  penguinFeet: 0xff8a3d,
+  bearFur: 0xfbf8ee,
+  bearShade: 0xd6dcf0,
+  bearDeep: 0xb7bfe0,
+  bearNose: 0x2b2f4a,
+  bearMouth: 0xd95b7a,
+  eagleBody: 0x8a5a3c,
+  eagleWing: 0x6b4430,
+  eagleTips: 0x4a2f22,
+  eagleHead: 0xfdfdfd,
+  eagleBeak: 0xffc93c,
+  eagleTalon: 0xf5ad2a,
+  sledBody: 0xe8423f,
+  sledShade: 0xb52f37,
+  sledStripe: 0xffc93c,
+  sledSeat: 0x3a3f5c,
+  sledTrack: 0x2f3550,
+  sledMetal: 0x8d93a8,
+  windscreen: 0xc8ecff,
+  headlight: 0xfff3b0,
+  exhaust: 0xdfe6f2,
 } as const;
 
 /** CSS hex string for text styles. */

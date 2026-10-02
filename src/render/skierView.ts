@@ -10,34 +10,49 @@ import { palette } from './palette';
 const PIVOT_UP = 30;
 /** Spin speed while tumbling after a crash, rad/s. */
 const TUMBLE_SPEED = 13;
-/** Drawn a bit larger than life so the yeti reads well when the camera zooms out. */
-const SCALE = 1.25;
+/** Drawn a bit larger than life so the yeti reads well when the camera zooms out. Mounts match it. */
+export const SCALE = 1.25;
 /** Outline width around the yeti's silhouette, px. Pale fur needs it on pale snow. */
 const LINE = 2.2;
 /** Where the scarf tails leave the knot, feet-relative px. */
 const NECK: Pt = [-6, -41];
+/** Riding on something: the boots rest on it (no skis), knees bent a little. */
+const SIT_SQUASH = 0.9;
 
-type Pt = [number, number];
-type Part = [color: number, pts: Pt[]];
+export type Pt = [number, number];
+export type Part = [color: number, pts: Pt[]];
 
 export class SkierView {
   readonly container: Phaser.GameObjects.Container;
   private readonly scarf: Phaser.GameObjects.Graphics;
+  private readonly skis: Phaser.GameObjects.Graphics;
   private squash = 0;
   private tumble = 0;
   private time = 0;
+  private lift = 0;
 
   constructor(scene: Phaser.Scene, layer: Phaser.GameObjects.Layer) {
     const body = scene.add.graphics();
     drawYeti(body);
+    this.skis = scene.add.graphics();
+    drawSkis(this.skis);
     this.scarf = scene.add.graphics();
-    this.container = scene.add.container(0, 0, [this.scarf, body]);
+    this.container = scene.add.container(0, 0, [this.scarf, this.skis, body]);
     layer.add(this.container);
   }
 
   /** Squash on landing; `amount` ~ 0..1. */
   land(amount: number): void {
     this.squash = Math.max(this.squash, amount);
+  }
+
+  /**
+   * Ride on top of a mount stack `lift` world px tall (0: on your own skis).
+   * The yeti stands that far up its body axis, skis off, knees bent.
+   */
+  ride(lift: number): void {
+    this.lift = lift;
+    this.skis.setVisible(lift === 0);
   }
 
   /**
@@ -57,14 +72,15 @@ export class SkierView {
     const rotation = angle + this.tumble;
 
     // Place the container so the body pivots around its middle, not the feet.
-    const px = x + Math.sin(angle) * PIVOT_UP * SCALE;
-    const py = y - Math.cos(angle) * PIVOT_UP * SCALE;
-    this.container.setPosition(px, py);
+    // Riding, the boots (4 px above the ski soles) rest on top of the stack.
+    const sit = this.lift > 0 ? SIT_SQUASH : 1;
+    const up = this.lift > 0 ? this.lift + (PIVOT_UP - 4) * SCALE * sit : PIVOT_UP * SCALE;
+    this.container.setPosition(x + Math.sin(angle) * up, y - Math.cos(angle) * up);
     this.container.setRotation(rotation);
 
     this.squash *= Math.exp(-dt * 9);
     const s = this.squash;
-    this.container.setScale(SCALE * (1 + 0.18 * s), SCALE * (1 - 0.28 * s));
+    this.container.setScale(SCALE * (1 + 0.18 * s) * (2 - sit), SCALE * (1 - 0.28 * s) * sit);
 
     this.drawScarf(rotation, vx, vy);
   }
@@ -107,7 +123,7 @@ export class SkierView {
 }
 
 /** Ellipse (or circle) as a polygon, optionally rotated, feet-relative. */
-function ell(cx: number, cy: number, rx: number, ry = rx, rot = 0, n = 20): Pt[] {
+export function ell(cx: number, cy: number, rx: number, ry = rx, rot = 0, n = 20): Pt[] {
   const c = Math.cos(rot);
   const s = Math.sin(rot);
   return Array.from({ length: n }, (_, i) => {
@@ -119,7 +135,7 @@ function ell(cx: number, cy: number, rx: number, ry = rx, rot = 0, n = 20): Pt[]
 }
 
 /** A rounded limb from (ax, ay) to (bx, by), radius r. */
-function limb(ax: number, ay: number, bx: number, by: number, r: number): Pt[] {
+export function limb(ax: number, ay: number, bx: number, by: number, r: number): Pt[] {
   const a = Math.atan2(by - ay, bx - ax);
   const pts: Pt[] = [];
   for (let i = 0; i <= 8; i++) {
@@ -152,19 +168,21 @@ function tufts(cx: number, cy: number, rx: number, ry: number, degs: number[], l
   });
 }
 
-/** Draw the yeti facing right with the pivot at (0, 0) (feet at y = PIVOT_UP). */
-function drawYeti(g: Phaser.GameObjects.Graphics): void {
-  const o = PIVOT_UP;
-  const vec = (pts: Pt[]) => pts.map(([x, y]) => new Phaser.Math.Vector2(x, y + o));
-  const fill = (color: number, pts: Pt[]) => {
-    g.fillStyle(color, 1);
+/**
+ * Flat fills and outlined groups, in the yeti's style, drawn `oy` px lower
+ * (so a drawing made feet-relative can pivot elsewhere). Mounts use it too.
+ */
+export function painter(g: Phaser.GameObjects.Graphics, oy = 0, line = palette.furLine) {
+  const vec = (pts: Pt[]) => pts.map(([x, y]) => new Phaser.Math.Vector2(x, y + oy));
+  const fill = (color: number, pts: Pt[], alpha = 1) => {
+    g.fillStyle(color, alpha);
     g.fillPoints(vec(pts), true);
   };
   // A group of parts sharing one outline: stroke every part first, then fill
   // them all, so the line only shows around the group's silhouette.
   const outlined = (parts: Part[]) => {
-    g.lineStyle(LINE * 2, palette.furLine, 1);
-    g.fillStyle(palette.furLine, 1);
+    g.lineStyle(LINE * 2, line, 1);
+    g.fillStyle(line, 1);
     for (const [, pts] of parts) {
       const v = vec(pts);
       g.strokePoints(v, true);
@@ -173,9 +191,12 @@ function drawYeti(g: Phaser.GameObjects.Graphics): void {
     }
     for (const [color, pts] of parts) fill(color, pts);
   };
+  return { fill, outlined };
+}
 
-  // Skis with an upturned tip.
-  fill(palette.skis, [
+/** Skis with an upturned tip, pivot-relative like the body. */
+function drawSkis(g: Phaser.GameObjects.Graphics): void {
+  painter(g, PIVOT_UP).fill(palette.skis, [
     [-42, -5],
     [36, -5],
     [44, -10],
@@ -183,6 +204,11 @@ function drawYeti(g: Phaser.GameObjects.Graphics): void {
     [43, -1],
     [-42, -1],
   ]);
+}
+
+/** Draw the yeti facing right with the pivot at (0, 0) (feet at y = PIVOT_UP). */
+function drawYeti(g: Phaser.GameObjects.Graphics): void {
+  const { fill, outlined } = painter(g, PIVOT_UP);
 
   // Far arm, swung back.
   outlined([

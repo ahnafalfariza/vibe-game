@@ -139,6 +139,166 @@ for (let i = 0; i < 2500 && wanted.size > 0; i++) {
 }
 if (wanted.size) console.log('not seen:', [...wanted].join(', '));
 console.log('obstacle run', JSON.stringify(await look()));
+
+// Mounts: a bare slope (no random obstacles or mounts, via saved tuning), with
+// each mount put just ahead of the yeti, then ridden. `?mount=` (startMount)
+// is tried too. Each step waits for its moment, then shoots it.
+async function mountPage(query, [vw, vh, vdpr] = [w, h, dpr]) {
+  const p = await browser.newPage({ viewport: { width: vw, height: vh }, deviceScaleFactor: vdpr });
+  p.on('pageerror', (e) => errors.push(e.message));
+  await p.addInitScript(() => localStorage.setItem('yeti-set-go.tuning', JSON.stringify({ obstacleDensity: 0, mountDensity: 0 })));
+  await p.clock.install({ time: 0 });
+  await p.clock.pauseAt(1000);
+  await p.goto(`http://localhost:${port}/?seed=${process.env.MOUNT_SEED ?? 11}${query}${process.env.DEBUG ? '&debug' : ''}`);
+  for (let i = 0; i < 40 && !(await p.evaluate(() => !!window.__game?.scene?.getScene('play')?.run)); i++) await p.clock.runFor(100);
+  await p.keyboard.press('Enter');
+  await p.clock.runFor(100);
+  return p;
+}
+const ride = (p) =>
+  p.evaluate(() => {
+    const run = window.__game.scene.getScene('play').run;
+    const s = run.skier;
+    // Keep the avalanche off our backs: this is a photo shoot.
+    run.avalancheX = Math.min(run.avalancheX, s.x - 1800);
+    const st = run.stats;
+    return {
+      x: Math.round(s.x),
+      mode: s.mode,
+      state: run.mounts.state,
+      stack: run.mounts.stack.join('+'),
+      h: Math.round(s.heightAboveGround()),
+      fuel: +run.mounts.fuel.toFixed(1),
+      eagle: +run.mounts.eagleTime.toFixed(1),
+      smashes: st.smashes,
+      shieldsLost: st.shieldsLost,
+    };
+  });
+/** Put `kind` (a mount, or 'rock') `d` px ahead of the yeti, on the slope. Returns its x. */
+const put = (p, kind, d) =>
+  p.evaluate(
+    ([kind, d]) => {
+      const run = window.__game.scene.getScene('play').run;
+      const x = run.skier.x + d;
+      if (kind === 'rock') run.spawner.add({ kind: 'rock', x0: x - 34, x1: x + 34, x, y: run.terrain.height(x) - 7, r: 34 });
+      else run.spawner.addMount(kind, x);
+      return x;
+    },
+    [kind, d],
+  );
+const until = async (p, ok, ms = 8000) => {
+  for (let t = 0; t < ms; t += 16) {
+    const st = await ride(p);
+    if (ok(st)) return st;
+    await p.clock.runFor(16);
+  }
+  return null;
+};
+const wait = (p, ms) => until(p, () => false, ms);
+const snap = async (p, name, st) => {
+  await p.screenshot({ path: `screenshots/tour-${name}.png` });
+  console.log(name, JSON.stringify(st ?? (await ride(p))));
+};
+const missed = [];
+const moment = async (p, name, ok, ms) => {
+  const st = await until(p, ok, ms);
+  if (st) await snap(p, name, st);
+  else missed.push(name);
+  return st;
+};
+/** Put `kind` ahead while on the snow, until riding into one does `done` (a few tries: it may get flown over). */
+const hitUntil = async (p, kind, done) => {
+  for (let i = 0; i < 5; i++) {
+    await until(p, (st) => st.mode === 'ground', 3000);
+    const x = await put(p, kind, 700);
+    const st = await until(p, (st) => done(st) || st.x > x + 300, 4000);
+    if (st && done(st)) return st;
+  }
+  return null;
+};
+const rockUntil = (p, done) => hitUntil(p, 'rock', done);
+/** A waiting mount, shot once the yeti is closing in on it. */
+const idleShot = async (p, kind, name) => {
+  await until(p, (st) => st.mode === 'ground', 3000);
+  const x = await put(p, kind, 1300);
+  await until(p, (st) => st.x > x - 650, 4000);
+  await snap(p, name);
+};
+
+// Penguin: waiting, ridden, then a rock knocks it off (the shield).
+const p3 = await mountPage('');
+await wait(p3, 1500);
+await idleShot(p3, 'penguin', '11-penguin-idle');
+await moment(p3, '12-penguin-ridden', (st) => st.stack === 'penguin', 6000);
+await wait(p3, 500);
+if (await rockUntil(p3, (st) => st.shieldsLost > 0)) {
+  await wait(p3, 120);
+  await snap(p3, '13-shield-lost');
+} else missed.push('13-shield-lost');
+// Eagle: circling above the slope, then jump into it and climb.
+await idleShot(p3, 'eagle', '14-eagle-idle');
+const eagleAt = await p3.evaluate(() => window.__game.scene.getScene('play').run.spawner.mounts.at(-1).ax);
+const near = await until(p3, (st) => st.state === 'carried' || (st.x > eagleAt - 300 && st.mode === 'ground'), 6000);
+if (near?.state !== 'carried') await p3.keyboard.down('Space');
+await moment(p3, '15-eagle-grab', (st) => st.state === 'carried', 2000);
+await p3.keyboard.down('Space');
+await wait(p3, 1500);
+await snap(p3, '15b-eagle-flight');
+await p3.keyboard.up('Space');
+await moment(p3, '15c-eagle-release', (st) => st.state !== 'carried', 6000);
+await wait(p3, 400);
+await snap(p3, '15d-eagle-flies-off');
+await p3.close();
+
+// Snowmobile: parked, ridden, picking up a penguin, running out of fuel.
+const p4 = await mountPage('');
+await wait(p4, 1500);
+await idleShot(p4, 'snowmobile', '16-snowmobile-idle');
+await moment(p4, '17-snowmobile-ridden', (st) => st.stack === 'snowmobile', 6000);
+await wait(p4, 600);
+await put(p4, 'penguin', 1300);
+await moment(p4, '18-snowmobile-penguin', (st) => st.stack === 'snowmobile+penguin', 6000);
+await wait(p4, 400);
+await snap(p4, '18b-snowmobile-penguin-later');
+await moment(p4, '19-out-of-fuel', (st) => st.stack === 'penguin', 20000);
+await wait(p4, 300);
+await snap(p4, '19b-out-of-fuel-after');
+await p4.close();
+
+// Polar bear, from ?mount=bear: ridden, smashing a rock, then swapped for a penguin (it runs off).
+const p5 = await mountPage('&mount=bear');
+await wait(p5, 1200);
+await snap(p5, '20-bear-ridden');
+if (await rockUntil(p5, (st) => st.smashes > 0)) {
+  await wait(p5, 60);
+  await snap(p5, '21-bear-smash');
+} else missed.push('21-bear-smash');
+await until(p5, (st) => st.mode === 'ground', 3000);
+await put(p5, 'penguin', 900);
+await moment(p5, '23-swap', (st) => st.stack === 'penguin', 6000);
+await wait(p5, 250);
+await snap(p5, '23b-swap-bear-runs');
+await p5.close();
+const p6 = await mountPage('');
+await wait(p6, 1500);
+await idleShot(p6, 'bear', '22-bear-idle');
+await p6.close();
+
+// The phone: a stacked rider, and eagle flight.
+const phone = [844, 390, 2];
+const p7 = await mountPage('&mount=snowmobile', phone);
+await wait(p7, 800);
+if (await hitUntil(p7, 'bear', (st) => st.stack === 'snowmobile+bear')) {
+  await wait(p7, 500);
+  await snap(p7, '24-phone-snowmobile-bear');
+} else missed.push('24-phone-snowmobile-bear');
+await p7.close();
+const p8 = await mountPage('&mount=eagle', phone);
+await p8.keyboard.down('Space');
+await wait(p8, 1800);
+await snap(p8, '25-phone-eagle');
+await p8.close();
+if (missed.length) console.log('mount moments not seen:', missed.join(', '));
 await browser.close();
 server.kill();
 if (errors.length) {

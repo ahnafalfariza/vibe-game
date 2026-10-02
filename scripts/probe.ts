@@ -1,9 +1,11 @@
 // Headless feel probe: run the simulation with simple bots and print stats.
 // Usage: bun run probe
 import { Run, SIM_DT } from '../src/sim/run';
-import { createTuning } from '../src/tuning';
+import { createTuning, type Tuning } from '../src/tuning';
 import type { RunEvent } from '../src/sim/run';
 import type { Cluster } from '../src/sim/spawner';
+import { MOUNT_KINDS, type MountKind, type WildMount } from '../src/sim/mounts';
+import type { RunStats } from '../src/sim/run';
 
 type Bot = (run: Run, t: number) => { held: boolean; pressed: boolean };
 
@@ -39,20 +41,21 @@ function lipJumper(): Bot {
   };
 }
 
-/** How long before reaching it the hopper jumps a rock, or onto a cabin roof, s. */
-const HOP_LEAD = { rock: 0.3, cabin: 0.45 };
+/** How long before reaching it the hopper jumps a rock, onto a cabin roof, or up into an eagle, s. */
+const HOP_LEAD = { rock: 0.3, cabin: 0.45, eagle: 0.2 };
 
-// The lip jumper, plus: hops (no flip) over rocks and onto cabins it sees coming.
+// The lip jumper, plus: hops (no flip) over rocks, onto cabins and into eagles it sees coming.
 function hopper(): Bot {
   const lip = lipJumper();
   return (run, t) => {
     const input = lip(run, t);
     const s = run.skier;
     if (s.mode !== 'ground' || input.pressed) return input;
-    for (const e of run.spawner.entities) {
-      if (e.kind !== 'rock' && (e.kind !== 'cabin' || e.broken)) continue;
+    for (const e of [...run.spawner.entities, ...run.spawner.mounts]) {
+      const kind = e.kind === 'rock' || (e.kind === 'cabin' && !e.broken) || (e.kind === 'eagle' && !(e as WildMount).taken) ? e.kind : null;
+      if (kind === null || (kind === 'rock' && run.mounts.stack.includes('bear'))) continue;
       const d = e.x0 - s.x;
-      if (d > 0 && d < s.velocity * HOP_LEAD[e.kind]) return { held: false, pressed: true };
+      if (d > 0 && d < s.velocity * HOP_LEAD[kind]) return { held: false, pressed: true };
     }
     return input;
   };
@@ -67,7 +70,8 @@ const BOTS: [string, () => Bot][] = [
 
 function simulate(name: string, bot: Bot, seed: number, seconds: number) {
   // The avalanche is off here so every bot gets the full time; survive() tests it.
-  const run = new Run(seed, createTuning(), false, true);
+  const run = new Run(seed, createTuning(), { avalanche: false, obstacles: true });
+  const wild = new Set<WildMount>();
   const events: RunEvent[] = [];
   let prevHeld = false;
   let speedSum = 0;
@@ -88,6 +92,7 @@ function simulate(name: string, bot: Bot, seed: number, seconds: number) {
     speedSum += run.skier.velocity;
     steps++;
     for (const e of run.spawner.entities) if (e.kind === 'coin') clusters.add(e.cluster);
+    for (const m of run.spawner.mounts) wild.add(m);
     for (const e of events) {
       if (e.type === 'takeoff' || e.type === 'jump') {
         takeoffs.push(t);
@@ -123,12 +128,18 @@ function simulate(name: string, bot: Bot, seed: number, seconds: number) {
     const rows = [...air].map(([k, v]) => `${k}:n=${v.length},avg=${(v.reduce((a, b) => a + b, 0) / v.length).toFixed(2)},max=${Math.max(...v).toFixed(2)}`);
     console.log('   air>0.25s by feature: ' + rows.join('  '));
   }
-  return { hits: hits.rock + hits.cabin, coins: st.coins, clusters: st.clusters, passed };
+  const offered = [...wild].filter((m) => m.ax < run.skier.x).length;
+  const rides = MOUNT_KINDS.reduce((n, k) => n + st.rides[k], 0);
+  console.log(
+    `   mounts offered ${offered} (one per ${(seconds / Math.max(1, offered)).toFixed(0)}s)  rode ${rides} ${JSON.stringify(st.rides)}  ` +
+      `ridden ${MOUNT_KINDS.map((k) => `${k}=${st.ridden[k].toFixed(0)}m`).join(' ')}  shields lost ${st.shieldsLost}  smashes ${st.smashes}  eagle ${st.eagleTime.toFixed(1)}s`,
+  );
+  return { hits: hits.rock + hits.cabin, coins: st.coins, clusters: st.clusters, passed, offered, rides, shields: st.shieldsLost, smashes: st.smashes };
 }
 
 /** Seconds until the avalanche catches the bot (capped at 5 minutes). */
-function survive(bot: Bot, seed: number): string {
-  const run = new Run(seed, createTuning());
+function survive(bot: Bot, seed: number, tuning: Tuning = createTuning(), startMount?: MountKind, stats?: RunStats[]): string {
+  const run = new Run(seed, tuning, { startMount });
   let prevHeld = false;
   let minGap = Infinity;
   for (let t = 0; t < 300 && !run.caught; t += SIM_DT) {
@@ -138,21 +149,26 @@ function survive(bot: Bot, seed: number): string {
     run.step(input, []);
     if (t < 10) minGap = Math.min(minGap, run.avalancheGap());
   }
+  stats?.push(run.stats);
   return Math.round(run.time) + (minGap < 150 ? ` (gap ${minGap.toFixed(0)}px in first 10s!)` : '');
 }
 
-const totals = new Map<string, { hits: number; coins: number; clusters: number; passed: number }>();
+type Totals = ReturnType<typeof simulate>;
+const totals = new Map<string, Totals>();
 for (const seed of [1, 2, 3]) {
   for (const [name, make] of BOTS) {
     const r = simulate(name, make(), seed, 60);
-    const t = totals.get(name) ?? { hits: 0, coins: 0, clusters: 0, passed: 0 };
+    const t = totals.get(name) ?? { hits: 0, coins: 0, clusters: 0, passed: 0, offered: 0, rides: 0, shields: 0, smashes: 0 };
     for (const k of Object.keys(r) as (keyof typeof r)[]) t[k] += r[k];
     totals.set(name, t);
   }
 }
 console.log('per bot over 3 × 60 s:');
 for (const [name, t] of totals) {
-  console.log(`   ${name.padEnd(8)} obstacle crashes ${t.hits}  coins ${t.coins}  full clusters ${t.clusters}/${t.passed} (${Math.round((100 * t.clusters) / Math.max(1, t.passed))}%)`);
+  console.log(
+    `   ${name.padEnd(8)} obstacle crashes ${t.hits}  coins ${t.coins}  full clusters ${t.clusters}/${t.passed} (${Math.round((100 * t.clusters) / Math.max(1, t.passed))}%)` +
+      `  mounts rode ${t.rides}/${t.offered}  shields lost ${t.shields}  smashes ${t.smashes}`,
+  );
 }
 const survival = new Map<string, number[]>();
 for (const seed of [1, 2, 3, 4, 5]) {
@@ -163,4 +179,16 @@ for (const seed of [1, 2, 3, 4, 5]) {
   });
   console.log(`avalanche seed=${seed} survived: ${row.join('  ')}`);
 }
-console.log('avalanche mean survival: ' + [...survival].map(([n, v]) => `${n} ${(v.reduce((a, b) => a + b, 0) / v.length).toFixed(0)}s`).join('  '));
+const mean = (v: number[]) => (v.reduce((a, b) => a + b, 0) / v.length).toFixed(0);
+console.log('avalanche mean survival: ' + [...survival].map(([n, v]) => `${n} ${mean(v)}s`).join('  '));
+// The same without mounts, for comparison.
+const bare = BOTS.map(([name, make]) => `${name} ${mean([1, 2, 3, 4, 5].map((seed) => parseInt(survive(make(), seed, createTuning({ mountDensity: 0 })))))}s`);
+console.log('   … without mounts: ' + bare.join('  '));
+// Starting on each mount (the rank perk / shop item): the hopper, over the same seeds.
+const starts = MOUNT_KINDS.map((kind) => {
+  const stats: RunStats[] = [];
+  const times = [1, 2, 3, 4, 5].map((seed) => parseInt(survive(hopper(), seed, createTuning(), kind, stats)));
+  const sum = (f: (s: RunStats) => number) => stats.reduce((n, s) => n + f(s), 0);
+  return `${kind} ${mean(times)}s (shields lost ${sum((s) => s.shieldsLost)}, smashes ${sum((s) => s.smashes)}, rode ${sum((s) => MOUNT_KINDS.reduce((n, k) => n + s.rides[k], 0))} more)`;
+});
+console.log('hopper starting on a mount: ' + starts.join('  '));
