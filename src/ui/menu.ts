@@ -1,12 +1,27 @@
-// Title, pause and game-over screens, plus the pause button. Plain DOM over
-// the canvas: real buttons are crisp, keyboard-focusable and easy to style,
-// and they swallow taps so menu clicks never reach the game.
+// Title, pause and game-over screens, the Goals and Shop panels, plus the
+// pause button. Plain DOM over the canvas: real buttons are crisp,
+// keyboard-focusable and easy to style, and they swallow taps so menu clicks
+// never reach the game.
 
 import { BIOMES, isBiomeUnlocked } from '../biomes';
+import { getProfile, persist } from '../profile';
+import {
+  UPGRADES,
+  buyUpgrade,
+  goalProgressText,
+  goalText,
+  isTotalGoal,
+  nextPerk,
+  rankMultiplier,
+  upgradeCost,
+  upgradeLevel,
+  type UpgradeId,
+} from '../sim/meta';
 
 const BEST_KEY = 'yeti-set-go.best';
 
-export type Screen = 'title' | 'pause' | 'over';
+export type Screen = 'title' | 'pause' | 'over' | 'goals' | 'shop';
+type Panel = 'goals' | 'shop';
 
 export interface MenuActions {
   play(): void;
@@ -19,24 +34,58 @@ export interface MenuActions {
   /** Returns the new music-on state. */
   toggleMusic(): boolean;
   click(): void;
+  /** Bought something in the shop. */
+  purchase(): void;
   /** The title-screen picker moved to this biome (locked ones too, as a preview). */
   biome(id: string): void;
+}
+
+/** A goal as the game-over screen shows it. */
+export interface GoalLine {
+  text: string;
+  /** "3 / 6" */
+  progress: string;
+  done: boolean;
+  /** Completed during this run. */
+  fresh: boolean;
 }
 
 export interface RunResult {
   score: number;
   metres: number;
   flips: number;
+  /** Coins this run, and the wallet after it. */
   coins: number;
+  wallet: number;
   bestAir: number;
   best: number;
   newBest: boolean;
+  /** "Rode 2 penguins · 3 smashes" ('' for none). */
+  rides: string;
+  /** The rank (and its score multiplier) the run was played at. */
+  rank: number;
+  rankMultiplier: number;
+  goals: GoalLine[];
+  rankUp: { rank: number; multiplier: number; unlocks: { name: string; text: string }[] } | null;
 }
 
 /** Ignore Space/Enter this long after the game-over screen appears, so a held jump doesn't skip it, ms. */
 const OVER_KEY_DELAY = 700;
 
 const fmt = (n: number) => Math.floor(n).toLocaleString('en-US');
+const COIN = '<i class="coin" aria-hidden="true"></i>';
+
+function goalList(goals: GoalLine[]): string {
+  return goals
+    .map(
+      (g) => `<li class="goal${g.done ? ' done' : ''}${g.fresh ? ' fresh' : ''}">
+        <span class="tick" aria-hidden="true"></span>
+        <span class="goal-text">${g.done ? '<span class="sr-only">Done: </span>' : ''}${g.text}</span>
+        <span class="goal-count">${g.done ? (g.fresh ? 'New!' : 'Done') : g.progress}</span>
+      </li>`,
+    )
+    .join('');
+}
 
 export class Menu {
   private readonly root: HTMLElement;
@@ -45,6 +94,8 @@ export class Menu {
   screen: Screen | null = null;
   private shownAt = 0;
   private biomeIndex: number;
+  /** What had focus before a panel opened, to hand it back on close. */
+  private opener: HTMLElement | null = null;
 
   constructor(
     private readonly actions: MenuActions,
@@ -67,6 +118,10 @@ export class Menu {
           <button class="btn small arrow" data-act="biome-next" aria-label="Next mountain">›</button>
         </div>
         <button class="btn primary big" data-act="play">Play</button>
+        <div class="meta-row">
+          <button class="btn small" data-act="goals" aria-haspopup="dialog">Goals <span class="tag goals-tag"></span></button>
+          <button class="btn small" data-act="shop" aria-haspopup="dialog">Shop <span class="tag">${COIN}<span class="coins-tag"></span></span></button>
+        </div>
         <p class="best"></p>
         <p class="controls">${controls}</p>
         <div class="toggles"><button class="btn small" data-act="mute"></button><button class="btn small" data-act="music"></button></div>
@@ -80,16 +135,56 @@ export class Menu {
       </section>
       <section class="screen over" hidden>
         <h2>Caught by the avalanche!</h2>
-        <p class="score"></p>
-        <p class="new-best" hidden>New best!</p>
-        <p class="stats"></p>
-        <p class="best"></p>
-        <button class="btn primary" data-act="play">Play again</button>
-        <button class="btn" data-act="home">Main menu</button>
+        <div class="over-body">
+          <div class="over-main">
+            <p class="score"></p>
+            <p class="new-best" hidden>New best!</p>
+            <p class="stats"></p>
+            <p class="rides"></p>
+            <p class="coins-line"></p>
+            <p class="best"></p>
+            <div class="row">
+              <button class="btn primary" data-act="play">Play again</button>
+              <button class="btn" data-act="home">Main menu</button>
+            </div>
+          </div>
+          <div class="card over-goals">
+            <div class="rankup" hidden>
+              <p class="rankup-title">Rank up!</p>
+              <p class="rankup-text"></p>
+              <ul class="unlocks"></ul>
+            </div>
+            <p class="card-head"></p>
+            <ul class="goal-list"></ul>
+          </div>
+        </div>
+      </section>
+      <section class="screen panel goals" role="dialog" aria-modal="true" aria-labelledby="goals-heading" hidden>
+        <h2 id="goals-heading">Goals</h2>
+        <div class="card">
+          <p class="card-head"></p>
+          <ul class="goal-list"></ul>
+          <p class="card-foot"></p>
+        </div>
+        <button class="btn" data-act="close">Back</button>
+      </section>
+      <section class="screen panel shop" role="dialog" aria-modal="true" aria-labelledby="shop-heading" hidden>
+        <h2 id="shop-heading">Shop</h2>
+        <p class="wallet" aria-live="polite"></p>
+        <ul class="shop-list">${UPGRADES.map(
+          (u) => `<li class="card item">
+            <div class="item-info">
+              <p class="item-name">${u.name} <span class="pips">${u.costs.map(() => '<i></i>').join('')}</span></p>
+              <p class="item-effect"></p>
+            </div>
+            <button class="btn small buy" data-act="buy" data-id="${u.id}"></button>
+          </li>`,
+        ).join('')}</ul>
+        <button class="btn" data-act="close">Back</button>
       </section>`;
     document.body.append(this.root);
     const q = <T extends HTMLElement>(sel: string) => this.root.querySelector(sel) as T;
-    this.screens = { title: q('.title'), pause: q('.pause'), over: q('.over') };
+    this.screens = { title: q('.title'), pause: q('.pause'), over: q('.over'), goals: q('.goals'), shop: q('.shop') };
     this.pauseButton = q('.pause-btn');
     this.setMuted(muted);
     this.setMusic(music);
@@ -97,12 +192,16 @@ export class Menu {
     this.renderBiome();
 
     this.root.addEventListener('click', (e) => {
-      const act = (e.target as HTMLElement).closest<HTMLElement>('[data-act]')?.dataset.act;
+      const el = (e.target as HTMLElement).closest<HTMLElement>('[data-act]');
+      const act = el?.dataset.act;
       if (!act) return;
+      if (act === 'buy') return this.buy(el!.dataset.id as UpgradeId);
       this.actions.click();
       if (act === 'mute') this.setMuted(this.actions.toggleMute());
       else if (act === 'music') this.setMusic(this.actions.toggleMusic());
       else if (act === 'biome-prev' || act === 'biome-next') this.stepBiome(act === 'biome-next' ? 1 : -1);
+      else if (act === 'goals' || act === 'shop') this.openPanel(act);
+      else if (act === 'close') this.closePanel();
       else if (act === 'play' || act === 'pause' || act === 'resume' || act === 'restart' || act === 'home') this.actions[act]();
     });
     // Keep presses on the overlay from also counting as a jump.
@@ -119,7 +218,10 @@ export class Menu {
     const confirm = (e.code === 'Space' || e.code === 'Enter') && !onButton;
     const back = e.code === 'Escape' || e.code === 'KeyP';
     if (e.code === 'KeyM') this.setMuted(this.actions.toggleMute());
-    else if (this.screen === null && back) this.actions.pause();
+    else if ((this.screen === 'goals' || this.screen === 'shop') && e.code === 'Escape') {
+      this.actions.click();
+      this.closePanel();
+    } else if (this.screen === null && back) this.actions.pause();
     else if (this.screen === 'pause' && back) this.actions.resume();
     else if (this.screen === 'title' && (e.code === 'ArrowLeft' || e.code === 'ArrowRight')) {
       this.actions.click();
@@ -154,6 +256,74 @@ export class Menu {
     el.querySelector<HTMLButtonElement>('[data-act="play"]')!.disabled = locked;
   }
 
+  /** The Goals / Shop buttons' little tags: rank and goals done, coins. */
+  private renderTitleMeta(): void {
+    const p = getProfile();
+    const el = this.screens.title;
+    el.querySelector('.goals-tag')!.textContent = `Rank ${p.rank} · ${p.goals.filter((g) => g.done).length}/${p.goals.length}`;
+    el.querySelector('.coins-tag')!.textContent = fmt(p.coins);
+  }
+
+  private renderGoals(): void {
+    const p = getProfile();
+    const el = this.screens.goals;
+    el.querySelector('.card-head')!.textContent = `Rank ${p.rank} · score ×${rankMultiplier(p.rank)}`;
+    el.querySelector('.goal-list')!.innerHTML = goalList(
+      p.goals.map((g) => ({ text: goalText(g), progress: (isTotalGoal(g) ? '' : 'Best ') + goalProgressText(g), done: g.done, fresh: false })),
+    );
+    const perk = nextPerk(p.rank);
+    const all = p.goals.every((g) => g.done);
+    el.querySelector('.card-foot')!.textContent = all
+      ? 'All done! Finish a run to rank up.'
+      : `Finish all three to reach rank ${p.rank + 1} (score ×${rankMultiplier(p.rank + 1)})` + (perk ? ` · Rank ${perk.rank}: ${perk.name}` : '');
+  }
+
+  private renderShop(): void {
+    const p = getProfile();
+    this.screens.shop.querySelector('.wallet')!.innerHTML = `${COIN}<span>${fmt(p.coins)}</span><span class="sr-only"> coins</span>`;
+    for (const li of this.screens.shop.querySelectorAll<HTMLElement>('.item')) {
+      const button = li.querySelector<HTMLButtonElement>('.buy')!;
+      const u = UPGRADES.find((u) => u.id === button.dataset.id)!;
+      const level = upgradeLevel(p, u.id);
+      const cost = upgradeCost(p, u.id);
+      li.querySelectorAll('.pips i').forEach((pip, i) => pip.classList.toggle('on', i < level));
+      li.querySelector('.pips')!.setAttribute('aria-label', `Level ${level} of ${u.costs.length}`);
+      // What the next level does (or, maxed out, what you have).
+      li.querySelector('.item-effect')!.textContent = u.effect(cost === null ? level : level + 1);
+      li.classList.toggle('maxed', cost === null);
+      button.disabled = cost === null || p.coins < cost;
+      button.innerHTML = cost === null ? 'Max' : `${fmt(cost)} ${COIN}`;
+      button.setAttribute('aria-label', cost === null ? `${u.name}: maxed out` : `Buy ${u.name} level ${level + 1} for ${fmt(cost)} coins`);
+    }
+  }
+
+  private buy(id: UpgradeId): void {
+    if (buyUpgrade(getProfile(), id)) {
+      persist();
+      this.actions.purchase();
+    }
+    this.renderShop();
+    // A button that just went disabled drops focus: hand it to the next one that works.
+    if (document.activeElement === document.body || (document.activeElement as HTMLButtonElement | null)?.disabled) {
+      this.screens.shop.querySelector<HTMLElement>('.buy:not(:disabled), [data-act="close"]')?.focus();
+    }
+  }
+
+  private openPanel(panel: Panel): void {
+    this.opener = document.activeElement as HTMLElement | null;
+    if (panel === 'goals') this.renderGoals();
+    else this.renderShop();
+    this.show(panel);
+    this.screens[panel].querySelector<HTMLElement>('button:not(:disabled)')?.focus();
+  }
+
+  private closePanel(): void {
+    this.renderTitleMeta();
+    this.show('title');
+    const back = this.opener?.isConnected ? this.opener : this.screens.title.querySelector<HTMLElement>('[data-act="goals"]');
+    back?.focus();
+  }
+
   private show(screen: Screen | null): void {
     this.screen = screen;
     this.shownAt = performance.now();
@@ -165,7 +335,9 @@ export class Menu {
   showTitle(best: number): void {
     this.screens.title.querySelector('.best')!.textContent = best > 0 ? `Best ${fmt(best)}` : '';
     this.renderBiome();
-    this.show('title');
+    this.renderTitleMeta();
+    // An open panel stays open while the demo run behind it restarts.
+    if (this.screen !== 'goals' && this.screen !== 'shop') this.show('title');
     this.pauseButton.hidden = true;
   }
 
@@ -177,8 +349,20 @@ export class Menu {
     const el = this.screens.over;
     el.querySelector('.score')!.textContent = fmt(r.score);
     (el.querySelector('.new-best') as HTMLElement).hidden = !r.newBest;
-    el.querySelector('.stats')!.textContent = `${fmt(r.metres)} m · ${r.flips} flips · ${r.coins} coins · best air ${r.bestAir.toFixed(1)}s`;
+    el.querySelector('.stats')!.textContent = `${fmt(r.metres)} m · ${r.flips} flips · best air ${r.bestAir.toFixed(1)}s`;
+    const rides = el.querySelector<HTMLElement>('.rides')!;
+    rides.textContent = r.rides;
+    rides.hidden = r.rides === '';
+    el.querySelector('.coins-line')!.innerHTML = `${COIN}+${fmt(r.coins)} coins · ${fmt(r.wallet)} total`;
     el.querySelector('.best')!.textContent = r.newBest ? '' : `Best ${fmt(r.best)}`;
+    el.querySelector('.card-head')!.textContent = `Goals · Rank ${r.rank}` + (r.rankMultiplier > 1 ? ` · score ×${r.rankMultiplier}` : '');
+    el.querySelector('.goal-list')!.innerHTML = goalList(r.goals);
+    const up = el.querySelector<HTMLElement>('.rankup')!;
+    up.hidden = r.rankUp === null;
+    if (r.rankUp) {
+      up.querySelector('.rankup-text')!.textContent = `Rank ${r.rankUp.rank} · score ×${r.rankUp.multiplier} from now on`;
+      up.querySelector('.unlocks')!.innerHTML = r.rankUp.unlocks.map((u) => `<li><b>Unlocked: ${u.name}</b><span>${u.text}</span></li>`).join('');
+    }
     this.show('over');
   }
 

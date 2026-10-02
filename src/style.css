@@ -62,7 +62,7 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: clamp(6px, 1.6vh, 14px);
+  gap: clamp(6px, 1.6vmin, 14px);
   animation: pop-in 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
@@ -89,28 +89,28 @@ body {
 }
 
 .screen h1 {
-  font-size: clamp(40px, 12vh, 96px);
+  font-size: clamp(40px, 12vmin, 96px);
   transform: rotate(-3deg);
 }
 
 .screen h2 {
-  font-size: clamp(28px, 7vh, 56px);
+  font-size: clamp(28px, 7vmin, 56px);
 }
 
 .screen .score {
-  font-size: clamp(44px, 14vh, 110px);
+  font-size: clamp(44px, 14vmin, 110px);
   color: var(--yellow);
 }
 
 .screen p {
   margin: 0;
   font-weight: 500;
-  font-size: clamp(15px, 3vh, 22px);
+  font-size: clamp(15px, 3vmin, 22px);
   text-shadow: 0 2px 0 var(--ink);
 }
 
 .screen .tagline {
-  margin-bottom: clamp(4px, 2vh, 18px);
+  margin-bottom: clamp(4px, 2vmin, 18px);
 }
 
 .screen .controls {
@@ -136,7 +136,7 @@ body {
   border-radius: 999px;
   background: #fff;
   color: var(--ink);
-  font: 600 clamp(18px, 3.6vh, 26px) / 1.2 Fredoka, 'Trebuchet MS', system-ui, sans-serif;
+  font: 600 clamp(18px, 3.6vmin, 26px) / 1.2 Fredoka, 'Trebuchet MS', system-ui, sans-serif;
   box-shadow: 0 4px 0 var(--ink);
   cursor: pointer;
   touch-action: manipulation;
@@ -166,12 +166,12 @@ body {
 
 .btn.big {
   min-width: 240px;
-  font-size: clamp(24px, 5.5vh, 38px);
+  font-size: clamp(24px, 5.5vmin, 38px);
 }
 
 .btn.small {
   min-width: 0;
-  font-size: clamp(14px, 2.6vh, 18px);
+  font-size: clamp(14px, 2.6vmin, 18px);
   box-shadow: 0 3px 0 var(--ink);
 }
 
@@ -200,7 +200,7 @@ body {
   width: 2em;
   aspect-ratio: 1;
   padding: 0;
-  font-size: clamp(18px, 3.6vh, 24px);
+  font-size: clamp(18px, 3.6vmin, 24px);
   line-height: 1;
 }
 
@@ -220,7 +220,7 @@ body {
   position: fixed;
   top: max(12px, env(safe-area-inset-top));
   right: max(12px, env(safe-area-inset-right));
-  width: clamp(40px, 7.5vh, 60px);
+  width: clamp(40px, 7.5vmin, 60px);
   aspect-ratio: 1;
   display: flex;
   align-items: center;
@@ -243,9 +243,314 @@ body {
   background: var(--ink);
 }
 
+/* ---- Meta: goals, shop, game-over summary ---- */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.coin {
+  display: inline-block;
+  width: 0.85em;
+  height: 0.85em;
+  margin-right: 0.25em;
+  vertical-align: -0.1em;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #fff6cf 0 18%, #ffcf3f 22% 58%, #e2961c 62%);
+  box-sizing: border-box;
+}
+
+.row,
+.meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+
+.meta-row .btn,
+.over-main .row .btn {
+  min-width: 0;
+  padding-inline: 1em;
+}
+
+.tag {
+  margin-left: 0.3em;
+  padding: 0.05em 0.5em;
+  border-radius: 999px;
+  background: var(--ink);
+  color: #fff;
+  font-size: 0.8em;
+  white-space: nowrap;
+}
+
+.tag .coin {
+  border-color: #fff;
+}
+
+/* A white card in the buttons' style: ink outline and a drop shadow. */
+.card {
+  box-sizing: border-box;
+  padding: 10px 16px;
+  border: 3px solid var(--ink);
+  border-radius: 18px;
+  background: rgb(255 255 255 / 0.94);
+  box-shadow: 0 4px 0 var(--ink);
+  color: var(--ink);
+  text-align: left;
+}
+
+.screen .card p {
+  text-shadow: none;
+}
+
+.screen .card-head {
+  font-weight: 600;
+}
+
+.screen .card-foot {
+  margin-top: 4px;
+  font-size: clamp(13px, 2.4vmin, 17px);
+  opacity: 0.8;
+}
+
+.goal-list {
+  display: grid;
+  gap: 6px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.goal {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 8px 4px 4px;
+  border-radius: 12px;
+  font-weight: 500;
+  font-size: clamp(14px, 2.7vmin, 19px);
+  line-height: 1.2;
+}
+
+.goal .tick {
+  width: 1.3em;
+  height: 1.3em;
+  border: 2.5px solid var(--ink);
+  border-radius: 50%;
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+}
+
+.goal.done .tick {
+  background: #5fd38d;
+}
+
+.goal.done .tick::after {
+  content: '✓';
+  color: var(--ink);
+  font-weight: 600;
+  font-size: 0.8em;
+  line-height: 1;
+}
+
+.goal.done .goal-text {
+  opacity: 0.7;
+}
+
+.goal-count {
+  font-weight: 600;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.goal.fresh {
+  background: #fff1bf;
+  animation: pop-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) 0.2s backwards;
+}
+
+.goal.fresh .goal-text {
+  opacity: 1;
+}
+
+.goal.fresh .goal-count {
+  color: var(--orange-dark);
+}
+
+/* Goals and Shop panels */
+.panel {
+  width: min(560px, 100%);
+}
+
+.panel .card {
+  width: 100%;
+}
+
+.screen .wallet {
+  font-weight: 600;
+  font-size: clamp(18px, 3.6vmin, 26px);
+}
+
+.shop {
+  width: min(820px, 100%);
+}
+
+.shop-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 10px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px 6px 14px;
+}
+
+.item-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.screen .item-name {
+  font-weight: 600;
+  font-size: clamp(15px, 2.8vmin, 20px);
+}
+
+.screen .item-effect {
+  font-size: clamp(12px, 2.3vmin, 16px);
+  line-height: 1.2;
+  opacity: 0.85;
+}
+
+.pips {
+  display: inline-flex;
+  gap: 3px;
+  margin-left: 4px;
+  vertical-align: 0.05em;
+}
+
+.pips i {
+  width: 0.55em;
+  height: 0.55em;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+}
+
+.pips i.on {
+  background: var(--orange);
+}
+
+.item.maxed {
+  background: rgb(255 241 191 / 0.95);
+}
+
+.btn.buy {
+  min-width: 5.6em;
+  white-space: nowrap;
+}
+
+.btn.buy:not(:disabled) {
+  background: var(--yellow);
+}
+
+.btn.buy:disabled .coin {
+  opacity: 0.6;
+}
+
+/* Game over: the run on the left, goals on the right (stacked when narrow). */
+.over-body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(10px, 2vmin, 18px) 28px;
+}
+
+.over-main {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(4px, 1.2vmin, 10px);
+}
+
+.over-main .row {
+  margin-top: clamp(2px, 1vmin, 8px);
+}
+
+.over-goals {
+  /* Not a % width: it must hold during intrinsic sizing too, or the row wraps. */
+  width: min(400px, 100vw - 32px);
+}
+
+.screen .rides,
+.screen .coins-line {
+  font-size: clamp(14px, 2.7vmin, 20px);
+}
+
+.rankup {
+  margin: -2px -6px 8px;
+  padding: 6px 10px 8px;
+  border-radius: 12px;
+  background: var(--orange);
+  color: #fff;
+  text-align: center;
+  animation: pop-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.3s backwards;
+}
+
+.screen .rankup p {
+  text-shadow: 0 2px 0 var(--orange-dark);
+}
+
+.screen .rankup-title {
+  font-weight: 600;
+  font-size: clamp(22px, 4.6vmin, 32px);
+  line-height: 1.1;
+  color: #fff;
+  animation: pulse 0.8s ease-in-out infinite alternate;
+}
+
+.unlocks {
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+  font-weight: 600;
+  font-size: clamp(13px, 2.4vmin, 17px);
+  color: var(--ink);
+}
+
+.unlocks li {
+  margin-top: 6px;
+  padding: 3px 12px 4px;
+  border-radius: 12px;
+  background: var(--yellow);
+}
+
+.unlocks span {
+  display: block;
+  font-weight: 500;
+  font-size: 0.9em;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .screen,
-  .screen .new-best {
+  .screen .new-best,
+  .goal.fresh,
+  .rankup,
+  .screen .rankup-title {
     animation: none;
   }
 }

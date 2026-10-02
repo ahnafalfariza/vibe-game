@@ -312,6 +312,36 @@ export class Sfx {
     this.engine.osc.frequency.setTargetAtTime(55 + 90 * v, now, 0.08);
     this.engine.filter.frequency.setTargetAtTime(400 + 1400 * v, now, 0.1);
   }
+
+  // ---- Meta progression ----
+
+  /** A goal completed mid-run: a bright two-note "ding-ding" with a sparkle. */
+  goal(): void {
+    [0, 7, 12].forEach((semi, i) => {
+      const f = 783.99 * 2 ** (semi / 12);
+      this.tone('triangle', f, f, 0.3, 0.2, i * 0.09);
+      this.tone('sine', f * 2, f * 2, 0.22, 0.06, i * 0.09);
+    });
+  }
+
+  /** Ranked up: a little fanfare climbing an octave and a half. */
+  rankUp(): void {
+    [0, 4, 7, 12, 16, 19, 24].forEach((semi, i) => {
+      const f = 523.25 * 2 ** (semi / 12);
+      const last = i === 6;
+      this.tone('square', f, f, last ? 0.6 : 0.14, last ? 0.08 : 0.06, i * 0.09);
+      this.tone('triangle', f, f, last ? 0.7 : 0.18, 0.2, i * 0.09);
+    });
+  }
+
+  /** Bought an upgrade: coins clinking into the till. */
+  purchase(): void {
+    [0, 5, 12].forEach((semi, i) => {
+      const f = 1318.5 * 2 ** (semi / 12);
+      this.tone('square', f, f, 0.06, 0.05, i * 0.05);
+      this.tone('sine', f * 1.5, f * 1.5, 0.14, 0.08, i * 0.05 + 0.02);
+    });
+  }
 }
 
 /** Quick attack, exponential decay. */
