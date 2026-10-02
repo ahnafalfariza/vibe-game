@@ -1,6 +1,6 @@
 import { Terrain } from './terrain';
 import { Skier, type SkierEvent, type SkierInput } from './skier';
-import { Spawner, type SpawnEvent } from './spawner';
+import { Spawner, type SpawnEvent, type SpawnTable } from './spawner';
 import { Score } from './score';
 import { PX_PER_METRE, type Tuning } from '../tuning';
 
@@ -48,9 +48,11 @@ export class Run {
     readonly avalanche = true,
     /** Rocks, cabins and ice. By default only in real runs: the demo run has no player to dodge them. */
     obstacles = avalanche,
+    /** What turns up on the slope (the biome's table). Default: alpine. */
+    table?: SpawnTable,
   ) {
     this.terrain = new Terrain(seed, tuning);
-    this.spawner = new Spawner(this.terrain, tuning, seed, obstacles, this.startX);
+    this.spawner = new Spawner(this.terrain, tuning, seed, obstacles, this.startX, table);
     this.skier = new Skier(this.spawner, tuning, this.startX);
     this.avalancheX = this.startX - tuning.avalancheStartGap;
   }

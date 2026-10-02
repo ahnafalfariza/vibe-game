@@ -86,7 +86,10 @@ export type SpawnKind = 'rock' | 'cabin' | 'ice' | 'coinLine' | 'coinArc' | 'non
  * What can go on each kind of feature: weight at difficulty 0 and at 1. A
  * second biome supplies its own table; mounts would add an animal kind.
  */
-export type SpawnTable = Record<FeatureKind, Partial<Record<SpawnKind, [easy: number, hard: number]>>>;
+export type SpawnTable = Record<FeatureKind, Partial<Record<SpawnKind, [easy: number, hard: number]>>> & {
+  /** Ice patch length range, px (default ICE_LEN). */
+  iceLen?: [number, number];
+};
 
 export const ALPINE: SpawnTable = {
   start: {},
@@ -419,7 +422,7 @@ export class Spawner implements Ground {
         return;
       }
       case 'ice': {
-        const len = r.range(...ICE_LEN);
+        const len = r.range(...(this.table.iceLen ?? ICE_LEN));
         // Only where you're on the snow, on a downhill stretch. Ice can't knock
         // you down, so it may run right up to a kicker lip.
         const a = this.spot(
