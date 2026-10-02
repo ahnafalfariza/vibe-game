@@ -7,6 +7,7 @@ import { createTuning } from './tuning';
 import { Tuner, loadSavedTuning } from './ui/tuner';
 import { Menu } from './ui/menu';
 import { Sfx } from './audio';
+import { findBiome, loadBiome } from './biomes';
 
 async function main(): Promise<void> {
   // Make sure the UI font is ready before Phaser rasterises any text.
@@ -20,6 +21,8 @@ async function main(): Promise<void> {
   const scene = () => game?.scene.getScene('play') as PlayScene | null | undefined;
   const sfx = new Sfx();
   const touch = matchMedia('(pointer: coarse)').matches;
+  // ?biome=… forces one (for testing; not remembered), else the last one picked.
+  const biome = findBiome(params.get('biome'))?.id ?? loadBiome();
   const ctx: GameContext = {
     tuning,
     tuner: new Tuner(tuning, { newRun: () => scene()?.newRun() }),
@@ -43,6 +46,7 @@ async function main(): Promise<void> {
     debug: params.has('debug'),
     touch,
     reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches,
+    biome,
   };
 
   // Render at device resolution (capped at 2x) and scale the canvas down with

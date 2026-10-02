@@ -11,6 +11,7 @@ import { SnowSpray, Snowfall } from '../render/effects';
 import { AvalancheView } from '../render/avalancheView';
 import { ObstacleView } from '../render/obstacleView';
 import { palette } from '../render/palette';
+import { applyBiome } from '../biomes';
 import { Hud } from '../ui/hud';
 import type { Tuner } from '../ui/tuner';
 import { loadBest, saveBest, type Menu } from '../ui/menu';
@@ -28,6 +29,8 @@ export interface GameContext {
   touch: boolean;
   /** OS "reduce motion" setting: no camera shake or flicker. */
   reducedMotion: boolean;
+  /** Biome id for the next run (title-screen picker, ?biome=…). */
+  biome: string;
 }
 
 /** World px visible vertically at zoom multiplier 1 (the design height). */
@@ -94,7 +97,9 @@ export class PlayScene extends Phaser.Scene {
     this.state = play ? 'playing' : 'menu';
     this.best = loadBest();
     this.overTimer = 0;
-    this.run = new Run(seed, this.ctx.tuning, play);
+    // Repaint before any view is built: they read the palette as they draw.
+    const biome = applyBiome(this.ctx.biome);
+    this.run = new Run(seed, this.ctx.tuning, play, play, biome.spawns);
     this.simEvents = [];
     this.accumulator = 0;
     this.pressed = false;
