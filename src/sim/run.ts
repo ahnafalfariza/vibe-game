@@ -1,6 +1,6 @@
 import { Terrain } from './terrain';
 import { Skier, type SkierEvent, type SkierInput } from './skier';
-import { Spawner, type SpawnEvent } from './spawner';
+import { Spawner, type SpawnEvent, type SpawnTable } from './spawner';
 import { Score } from './score';
 import { PX_PER_METRE, type Tuning } from '../tuning';
 
@@ -23,6 +23,15 @@ export interface RunStats {
   clusters: number;
 }
 
+export interface RunOptions {
+  /** Without the avalanche the run never ends (the title-screen backdrop). Default on. */
+  avalanche?: boolean;
+  /** Rocks, cabins and ice. Default: only with the avalanche (the demo run has no player to dodge them). */
+  obstacles?: boolean;
+  /** What goes on the slope (a biome's spawn table). Default: the alpine one. */
+  table?: SpawnTable;
+}
+
 /** Trick points awarded for a landing (pushed right after its 'land' event). */
 export type RunEvent = SkierEvent | SpawnEvent | { type: 'award'; x: number; y: number; points: number; multiplier: number };
 
@@ -33,6 +42,7 @@ export class Run {
   readonly spawner: Spawner;
   readonly skier: Skier;
   readonly startX = 0;
+  readonly avalanche: boolean;
   time = 0;
   readonly stats: RunStats = { flips: 0, cleanLandings: 0, crashes: 0, bestAirTime: 0, topSpeed: 0, coins: 0, clusters: 0 };
   readonly scoring = new Score();
@@ -44,13 +54,11 @@ export class Run {
   constructor(
     readonly seed: number,
     readonly tuning: Tuning,
-    /** Without the avalanche the run never ends (the title-screen backdrop). */
-    readonly avalanche = true,
-    /** Rocks, cabins and ice. By default only in real runs: the demo run has no player to dodge them. */
-    obstacles = avalanche,
+    { avalanche = true, obstacles = avalanche, table }: RunOptions = {},
   ) {
+    this.avalanche = avalanche;
     this.terrain = new Terrain(seed, tuning);
-    this.spawner = new Spawner(this.terrain, tuning, seed, obstacles, this.startX);
+    this.spawner = new Spawner(this.terrain, tuning, seed, obstacles, this.startX, table);
     this.skier = new Skier(this.spawner, tuning, this.startX);
     this.avalancheX = this.startX - tuning.avalancheStartGap;
   }

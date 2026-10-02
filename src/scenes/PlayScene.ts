@@ -94,7 +94,7 @@ export class PlayScene extends Phaser.Scene {
     this.state = play ? 'playing' : 'menu';
     this.best = loadBest();
     this.overTimer = 0;
-    this.run = new Run(seed, this.ctx.tuning, play);
+    this.run = new Run(seed, this.ctx.tuning, { avalanche: play });
     this.simEvents = [];
     this.accumulator = 0;
     this.pressed = false;

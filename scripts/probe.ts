@@ -67,7 +67,7 @@ const BOTS: [string, () => Bot][] = [
 
 function simulate(name: string, bot: Bot, seed: number, seconds: number) {
   // The avalanche is off here so every bot gets the full time; survive() tests it.
-  const run = new Run(seed, createTuning(), false, true);
+  const run = new Run(seed, createTuning(), { avalanche: false, obstacles: true });
   const events: RunEvent[] = [];
   let prevHeld = false;
   let speedSum = 0;
