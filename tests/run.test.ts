@@ -1,0 +1,74 @@
+import { describe, expect, it } from 'vitest';
+import { Run, type RunEvent } from '../src/sim/run';
+import { Score } from '../src/sim/score';
+import type { LandingQuality } from '../src/sim/skier';
+import { createTuning } from '../src/tuning';
+
+const land = (quality: LandingQuality, flips = 0, airTime = 0.5) =>
+  ({ type: 'land', x: 0, y: 0, quality, flips, airTime, errorDeg: 0 }) as const;
+
+describe('Score', () => {
+  it('pays more for each extra flip and builds a multiplier from clean flips', () => {
+    const s = new Score();
+    expect(s.land(land('clean', 1))).toBe(100);
+    expect(s.multiplier).toBe(2);
+    expect(s.land(land('clean', 2))).toBe(600); // 300 × 2
+    expect(s.multiplier).toBe(4);
+    expect(s.land(land('clean', 0, 2))).toBe(200); // big air 50 × 4
+    expect(s.multiplier).toBe(4);
+    expect(s.tricks).toBe(900);
+  });
+
+  it('wipes the multiplier on a sloppy landing or a crash', () => {
+    const s = new Score();
+    s.land(land('clean', 3));
+    expect(s.land(land('sloppy', 1))).toBe(50);
+    expect(s.multiplier).toBe(1);
+    s.land(land('clean', 2));
+    expect(s.land(land('crash'))).toBe(0);
+    expect(s.multiplier).toBe(1);
+  });
+
+  it('caps the multiplier', () => {
+    const s = new Score();
+    for (let i = 0; i < 10; i++) s.land(land('clean', 3));
+    expect(s.multiplier).toBe(10);
+  });
+});
+
+describe('Avalanche', () => {
+  const idle = { held: false, pressed: false };
+
+  it('catches a skier who stops, and the run freezes', () => {
+    const run = new Run(1, createTuning({ minSpeed: 0, maxSpeed: 0 }));
+    const events: RunEvent[] = [];
+    for (let i = 0; i < 120 * 10 && !run.caught; i++) run.step(idle, events);
+    expect(run.caught).toBe(true);
+    const x = run.skier.x;
+    for (let i = 0; i < 120; i++) run.step(idle, events);
+    expect(run.skier.x).toBe(x);
+  });
+
+  it('is never further behind than the max gap', () => {
+    const tuning = createTuning({ avalancheSpeed: 0, avalancheAccel: 0 });
+    const run = new Run(1, tuning);
+    for (let i = 0; i < 120 * 20; i++) run.step(idle, []);
+    expect(run.avalancheGap()).toBeLessThanOrEqual(tuning.avalancheMaxGap);
+    expect(run.caught).toBe(false);
+  });
+
+  it('eventually catches a skier who does nothing, but not straight away', () => {
+    for (const seed of [1, 2, 3]) {
+      const run = new Run(seed, createTuning());
+      for (let i = 0; i < 120 * 300 && !run.caught; i++) run.step(idle, []);
+      expect(run.caught, `seed ${seed}`).toBe(true);
+      expect(run.time, `seed ${seed}`).toBeGreaterThan(30);
+    }
+  });
+
+  it('is off in a run without one', () => {
+    const run = new Run(1, createTuning({ minSpeed: 0, maxSpeed: 0 }), false);
+    for (let i = 0; i < 120 * 20; i++) run.step(idle, []);
+    expect(run.caught).toBe(false);
+  });
+});

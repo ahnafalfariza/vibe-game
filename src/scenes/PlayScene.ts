@@ -1,19 +1,25 @@
 import Phaser from 'phaser';
-import { Run, SIM_DT } from '../sim/run';
-import { wrapAngle, type SkierEvent } from '../sim/skier';
+import { Run, SIM_DT, type RunEvent } from '../sim/run';
+import { wrapAngle } from '../sim/skier';
+import { BIG_AIR_TIME } from '../sim/score';
 import { randomSeed } from '../sim/rng';
 import { PX_PER_METRE, type Tuning } from '../tuning';
 import { Background } from '../render/background';
 import { TerrainView } from '../render/terrainView';
 import { SkierView } from '../render/skierView';
 import { SnowSpray, Snowfall } from '../render/effects';
+import { AvalancheView } from '../render/avalancheView';
 import { palette } from '../render/palette';
 import { Hud } from '../ui/hud';
 import type { Tuner } from '../ui/tuner';
+import { loadBest, saveBest, type Menu } from '../ui/menu';
+import type { Sfx } from '../audio';
 
 export interface GameContext {
   tuning: Tuning;
   tuner: Tuner;
+  menu: Menu;
+  sfx: Sfx;
   /** From ?seed=… — replay the same mountain every run. */
   fixedSeed: number | null;
   debug: boolean;
@@ -25,6 +31,19 @@ const DESIGN_HEIGHT = 720;
 const MIN_ZOOM_MUL = 0.42;
 /** Space kept above the skier's feet when framing a jump: body height plus margin, world px. */
 const SKIER_HEADROOM = 140;
+/** The avalanche rumble starts when it is this close, px. */
+const DANGER_PX = 40 * PX_PER_METRE;
+/** Once the avalanche is this close the camera keeps it in shot, px. */
+const AVALANCHE_FRAME_PX = 1100;
+/** Room left of the avalanche's foot, so its leaning face is in shot too, px. */
+const AVALANCHE_MARGIN = 400;
+/** With the avalanche in shot the skier may sit up to this far across the screen (0..1). */
+const AVALANCHE_SKIER_POS = 0.7;
+/** Time between being caught and the game-over screen, s. */
+const CAUGHT_DELAY = 1.3;
+
+/** menu: title screen over a demo run · playing · paused · over: caught, then the game-over screen. */
+type State = 'menu' | 'playing' | 'paused' | 'over';
 
 function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
@@ -44,9 +63,13 @@ export class PlayScene extends Phaser.Scene {
   private spray!: SnowSpray;
   private snowfall!: Snowfall;
   private hud!: Hud;
+  private avalancheView!: AvalancheView;
 
   // Per-run state (reset in create(): the scene instance is reused on restart).
-  private simEvents: SkierEvent[] = [];
+  private state: State = 'menu';
+  private best = 0;
+  private overTimer = 0;
+  private simEvents: RunEvent[] = [];
   private accumulator = 0;
   private prev = { x: 0, y: 0, angle: 0 };
   private pressed = false;
@@ -60,9 +83,13 @@ export class PlayScene extends Phaser.Scene {
     super('play');
   }
 
-  create(data: { seed?: number }): void {
+  create(data: { seed?: number; play?: boolean }): void {
     const seed = data.seed ?? this.ctx.fixedSeed ?? randomSeed();
-    this.run = new Run(seed, this.ctx.tuning);
+    const play = data.play ?? false;
+    this.state = play ? 'playing' : 'menu';
+    this.best = loadBest();
+    this.overTimer = 0;
+    this.run = new Run(seed, this.ctx.tuning, play);
     this.simEvents = [];
     this.accumulator = 0;
     this.pressed = false;
@@ -84,17 +111,23 @@ export class PlayScene extends Phaser.Scene {
     const bgLayer = this.add.layer();
     const terrainLayer = this.add.layer();
     const actorLayer = this.add.layer();
+    const avalancheLayer = this.add.layer();
     const uiLayer = this.add.layer();
-    bgCam.ignore([terrainLayer, actorLayer, uiLayer]);
+    bgCam.ignore([terrainLayer, actorLayer, avalancheLayer, uiLayer]);
     this.worldCam.ignore([bgLayer, uiLayer]);
-    this.uiCam.ignore([bgLayer, terrainLayer, actorLayer]);
+    this.uiCam.ignore([bgLayer, terrainLayer, actorLayer, avalancheLayer]);
 
     this.background = new Background(this, bgLayer);
     this.terrainView = new TerrainView(this, terrainLayer, this.run.terrain);
     this.spray = new SnowSpray(this, actorLayer);
     this.skierView = new SkierView(this, actorLayer);
+    this.avalancheView = new AvalancheView(this, avalancheLayer, this.run.terrain);
     this.snowfall = new Snowfall(this, uiLayer);
     this.hud = new Hud(this, uiLayer, this.ctx.touch);
+    this.hud.setVisible(play);
+    this.ctx.sfx.setPaused(false);
+    if (play) this.ctx.menu.hide();
+    else this.ctx.menu.showTitle(this.best);
 
     this.setupInput();
     this.scale.on('resize', this.onResize, this);
@@ -102,17 +135,37 @@ export class PlayScene extends Phaser.Scene {
     this.onResize();
   }
 
-  newRun(): void {
-    this.scene.restart({ seed: this.ctx.fixedSeed ?? randomSeed() });
+  /** A fresh mountain; keeps playing unless on the title screen (or `play` says otherwise). */
+  newRun(play = this.state !== 'menu'): void {
+    this.scene.restart({ seed: this.ctx.fixedSeed ?? randomSeed(), play });
+  }
+
+  pause(): void {
+    if (this.state !== 'playing') return;
+    this.state = 'paused';
+    this.releaseInput();
+    this.scene.pause();
+    this.ctx.sfx.setPaused(true);
+    this.ctx.menu.showPause();
+  }
+
+  resume(): void {
+    if (this.state !== 'paused') return;
+    this.state = 'playing';
+    this.scene.resume();
+    this.ctx.sfx.setPaused(false);
+    this.ctx.menu.hide();
+  }
+
+  private releaseInput(): void {
+    this.pressed = false;
+    this.keyHeld = false;
+    this.pointersDown.clear();
   }
 
   private setupInput(): void {
     this.input.addPointer(2);
-    this.input.on('pointerdown', (p: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]) => {
-      if (over.includes(this.hud.restartButton)) {
-        this.newRun();
-        return;
-      }
+    this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
       this.pointersDown.add(p.id);
       this.pressed = true;
     });
@@ -137,13 +190,18 @@ export class PlayScene extends Phaser.Scene {
         if (isJumpKey(e.code)) this.keyHeld = false;
       });
     }
-    // Never leave the button "stuck down" when the tab loses focus.
-    const release = () => {
-      this.keyHeld = false;
-      this.pointersDown.clear();
+    // Never leave the button "stuck down" when the tab loses focus, and
+    // don't let the avalanche get you while you're away.
+    const away = () => {
+      this.releaseInput();
+      this.pause();
     };
-    this.game.events.on('blur', release);
-    this.events.once('shutdown', () => this.game.events.off('blur', release));
+    this.game.events.on(Phaser.Core.Events.BLUR, away);
+    this.game.events.on(Phaser.Core.Events.HIDDEN, away);
+    this.events.once('shutdown', () => {
+      this.game.events.off(Phaser.Core.Events.BLUR, away);
+      this.game.events.off(Phaser.Core.Events.HIDDEN, away);
+    });
   }
 
   private onResize(): void {
@@ -163,10 +221,13 @@ export class PlayScene extends Phaser.Scene {
       this.prev.x = sk.x;
       this.prev.y = sk.y;
       this.prev.angle = sk.angle;
-      this.run.step({ held: this.keyHeld || this.pointersDown.size > 0, pressed: this.pressed }, this.simEvents);
+      const live = this.state === 'playing';
+      this.run.step({ held: live && (this.keyHeld || this.pointersDown.size > 0), pressed: live && this.pressed }, this.simEvents);
       this.pressed = false;
       this.accumulator -= SIM_DT;
     }
+    if (this.state === 'playing' && this.run.caught) this.onCaught();
+    if (this.state === 'over' && this.overTimer > 0 && (this.overTimer -= dt) <= 0) this.showGameOver();
 
     // Render between the last two simulation steps for smooth motion at any refresh rate.
     const a = this.accumulator / SIM_DT;
@@ -183,20 +244,66 @@ export class PlayScene extends Phaser.Scene {
     const halfW = width / zoom / 2;
     this.terrainView.update(this.view.x - halfW, this.view.x + halfW);
     this.skierView.update(x, y, angle, sk.vx, sk.vy, sk.mode === 'crash', dt);
-    this.spray.update(x, y, sk.velocity, sk.mode === 'ground', dt);
+    this.spray.update(x, y, sk.velocity, sk.mode === 'ground' && !this.run.caught, dt);
+    if (this.run.avalanche) {
+      const avSpeed = this.run.avalancheSpeed();
+      // Interpolated like the skier, so the two don't jitter against each other.
+      this.avalancheView.update(this.run.avalancheX - avSpeed * SIM_DT * (1 - a), this.view.x - halfW, avSpeed, dt);
+    }
 
     this.bgScroll += (this.view.x - prevViewX) * zoom;
     const lift = Math.min(sk.heightAboveGround() * zoom * 0.25, height * 0.12);
     this.background.update(this.bgScroll, lift, dt);
     this.snowfall.update((this.view.x - prevViewX) * zoom, (this.view.y - prevViewY) * zoom, dt);
 
-    this.hud.update({
-      metres: this.run.distancePx() / PX_PER_METRE,
-      kmh: (sk.velocity / PX_PER_METRE) * 3.6,
-      flips: this.run.stats.flips,
-      bestAir: this.run.stats.bestAirTime,
+    const gap = this.run.avalanche ? this.run.avalancheGap() : Infinity;
+    const danger = this.state === 'playing' ? Math.max(0, Math.min(1, 1 - gap / DANGER_PX)) : 0;
+    this.hud.update(
+      {
+        score: this.run.score,
+        multiplier: this.run.scoring.multiplier,
+        metres: this.run.distancePx() / PX_PER_METRE,
+        kmh: (sk.velocity / PX_PER_METRE) * 3.6,
+        best: this.best,
+        avalancheM: gap / PX_PER_METRE,
+      },
+      dt,
+    );
+    this.ctx.sfx.ambience({
+      speed: this.run.caught ? 0 : sk.velocity,
+      grounded: sk.mode !== 'air' && !this.run.caught,
+      danger,
+      playing: this.state !== 'menu',
     });
     this.updateDebug(dt, zoom);
+  }
+
+  private onCaught(): void {
+    this.state = 'over';
+    this.overTimer = CAUGHT_DELAY;
+    this.releaseInput();
+    this.skierView.container.setVisible(false);
+    const sk = this.run.skier;
+    this.spray.burst(sk.x, sk.y, 40);
+    this.worldCam.shake(500, 0.012);
+    this.ctx.sfx.caught();
+    this.ctx.menu.hideAll();
+  }
+
+  private showGameOver(): void {
+    const score = this.run.score;
+    const newBest = score > this.best;
+    if (newBest) saveBest(score);
+    const st = this.run.stats;
+    this.hud.setVisible(false);
+    this.ctx.menu.showGameOver({
+      score,
+      metres: this.run.distancePx() / PX_PER_METRE,
+      flips: st.flips,
+      bestAir: st.bestAirTime,
+      best: Math.max(score, this.best),
+      newBest,
+    });
   }
 
   /**
@@ -221,8 +328,14 @@ export class PlayScene extends Phaser.Scene {
       const apex = sk.vy < 0 ? y - (sk.vy * sk.vy) / (2 * this.ctx.tuning.gravity) : y;
       top = apex - SKIER_HEADROOM;
     }
+    // Keep a close avalanche in shot: seeing what's chasing you is the tension.
+    // It's uphill, so the box grows upwards as well as backwards.
+    const gap = this.run.avalanche && !this.run.caught ? x - this.run.avalancheX : Infinity;
+    const behind = gap < AVALANCHE_FRAME_PX ? Math.max(0, gap) + AVALANCHE_MARGIN : 0;
+    if (behind > 0) top = Math.min(top, this.run.terrain.height(this.run.avalancheX) - 350);
     const fitMul = Math.min(
       width / (baseZoom * ((right - x) / 0.62 + 200)),
+      width / (baseZoom * (behind / AVALANCHE_SKIER_POS)),
       height / (baseZoom * ((bottom - top) / 0.7 + 220)),
     );
     const speedMul = 1 / (1 + Math.max(0, sk.velocity - 700) / 2200);
@@ -233,9 +346,11 @@ export class PlayScene extends Phaser.Scene {
     const viewH = height / zoom;
 
     // Keep the skier left of centre (the mountain is ahead) and centre the box.
-    const targetLeadX = Math.max(viewW * 0.14 + Math.max(0, sk.vx) * 0.08, (right - x) * 0.5);
+    let targetLeadX = Math.max(viewW * 0.14 + Math.max(0, sk.vx) * 0.08, (right - x) * 0.5);
+    // Slide the skier right to make room, but never far past centre (the zoom catches up).
+    if (behind > 0) targetLeadX = Math.max(viewW * (0.5 - AVALANCHE_SKIER_POS), Math.min(targetLeadX, viewW / 2 - behind));
     const targetLeadY = (top + bottom) / 2 - y + (airborne ? 0 : viewH * 0.06);
-    v.leadX = damp(v.leadX, targetLeadX, 3, dt);
+    v.leadX = damp(v.leadX, targetLeadX, behind > 0 ? 6 : 3, dt);
     v.leadY = damp(v.leadY, targetLeadY, airborne ? 8 : 4, dt);
     v.x = x + v.leadX;
     v.y = y + v.leadY;
@@ -267,26 +382,37 @@ export class PlayScene extends Phaser.Scene {
       (wx - this.view.x) * zoom + width / 2,
       (wy - this.view.y) * zoom + height / 2,
     ];
+    const u = height / DESIGN_HEIGHT;
+    // The title screen's demo run is silent apart from the ambience.
+    const sfx = this.state === 'playing' ? this.ctx.sfx : null;
     for (const e of this.simEvents) {
       if (e.type === 'jump') {
         this.spray.burst(e.x, e.y, 6);
+        sfx?.jump();
         this.hud.dismissHint();
       } else if (e.type === 'land') {
         const [sx, sy] = toScreen(e.x, e.y);
-        const popY = sy - 110 * (height / DESIGN_HEIGHT);
+        const popY = sy - 150 * u;
         if (e.airTime > 0.15) this.skierView.land(Math.min(1, 0.25 + e.airTime * 0.5));
         if (e.airTime > 0.25) this.spray.burst(e.x, e.y, Math.round(6 + e.airTime * 14));
+        sfx?.land(Math.min(1, e.airTime * 0.7));
         if (e.quality === 'crash') {
           this.hud.popup('Wipeout!', sx, popY, palette.scarf, 40);
           this.spray.burst(e.x, e.y, 30);
           this.worldCam.shake(260, 0.006);
+          sfx?.crash();
         } else if (e.quality === 'sloppy') {
           this.hud.popup(e.flips > 0 ? flipName(e.flips) + ' — sloppy' : 'Sloppy', sx, popY, 0xffd6a5, 26);
+          sfx?.sloppy();
         } else if (e.flips > 0) {
           this.hud.popup(flipName(e.flips), sx, popY, palette.beanie, 34 + 6 * Math.min(e.flips, 3));
-        } else if (e.airTime > 1.1) {
+          sfx?.trick(e.flips, this.run.scoring.multiplier);
+        } else if (e.airTime > BIG_AIR_TIME) {
           this.hud.popup('Big air!', sx, popY, 0xffffff, 28);
         }
+      } else if (e.type === 'award' && this.state === 'playing') {
+        const [sx, sy] = toScreen(e.x, e.y);
+        this.hud.popup(`+${e.points}` + (e.multiplier > 1 ? ` ×${e.multiplier}` : ''), sx, sy - 108 * u, 0xffffff, 24);
       }
     }
     this.simEvents.length = 0;

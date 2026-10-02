@@ -32,6 +32,10 @@ const RANGES: Record<keyof Tuning, Range> = {
   coyoteTime: [0, 0.3, 0.01],
   jumpBuffer: [0, 0.3, 0.01],
   mountainSlope: [0.1, 0.7, 0.01],
+  avalancheStartGap: [200, 3000, 50],
+  avalancheSpeed: [0, 1500, 10],
+  avalancheAccel: [0, 30, 0.5],
+  avalancheMaxGap: [800, 6000, 100],
 };
 
 const GROUPS: [string, (keyof Tuning)[]][] = [
@@ -39,6 +43,7 @@ const GROUPS: [string, (keyof Tuning)[]][] = [
   ['Jump & flip', ['jumpImpulse', 'flipSpeed', 'flipAccel', 'spinDamping', 'flipBoost', 'coyoteTime', 'jumpBuffer']],
   ['Landing', ['landingAssist', 'landingAssistDeg', 'cleanLandingDeg', 'crashLandingDeg', 'sloppySpeedKeep', 'crashSpeedKeep', 'crashDuration']],
   ['Mountain (new runs)', ['mountainSlope']],
+  ['Avalanche', ['avalancheStartGap', 'avalancheSpeed', 'avalancheAccel', 'avalancheMaxGap']],
 ];
 
 export function loadSavedTuning(): Partial<Tuning> {
