@@ -252,7 +252,9 @@ export class PlayScene extends Phaser.Scene {
     this.skierView.update(x, y, angle, sk.vx, sk.vy, sk.mode === 'crash', dt);
     // Flicker while obstacles can't knock you down (just after getting up).
     this.skierView.container.setAlpha(sk.invulnTimer > 0 && sk.mode !== 'crash' && Math.floor(time / 70) % 2 ? 0.35 : 1);
-    this.spray.update(x, y, sk.velocity, sk.mode === 'ground' && !this.run.caught, dt);
+    // No snow kicked up on ice: the skis go quiet and slick (you can still jump as normal).
+    const onIce = sk.mode === 'ground' && this.run.spawner.sample(sk.x).ice === true;
+    this.spray.update(x, y, sk.velocity, sk.mode === 'ground' && !onIce && !this.run.caught, dt);
     if (this.run.avalanche) {
       const avSpeed = this.run.avalancheSpeed();
       // Interpolated like the skier, so the two don't jitter against each other.
