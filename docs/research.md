@@ -82,7 +82,8 @@ else.
 
 ### Phase 2: The Safari
 - Mount system as a state machine plus a **stack** (snowmobile carries others)
-- Penguin → Yeti → Eagle → Snowmobile, in that order (rising complexity)
+- Penguin → Eagle → Snowmobile, in that order (rising complexity). The player
+  is the yeti, so the tough "smash through obstacles" mount needs another animal.
 - Mount-as-shield rules
 
 ### Phase 3: Meta progression
@@ -192,7 +193,8 @@ Key design decisions:
 |---|---|
 | Platform | Web first (desktop + mobile browser) |
 | Goal | Learning to make fun games + portfolio. Not commercial, not published to stores. |
-| Name | **Selancar Ahay** |
+| Name | **Yeti, Set, Go!** (renamed 2026-10-02 from Selancar Ahay) |
+| Player character | A yeti on skis, not a human skier. Makes the name literal and sets it apart from Ski Safari's Sven. |
 | Art | See §7. Start with shapes drawn in code; bring in AI-generated characters only once the style is locked. |
 
 ## 7. Art direction and where the sprites come from
@@ -205,8 +207,8 @@ All colours live in `src/render/palette.ts`.
 - The slope, sky, mountains, trees and snow *must* be drawn in code anyway,
   because the terrain is procedural. This is most of the screen and it is
   already done.
-- Only the characters and props need to be designed: the skier, penguin,
-  yeti, eagle, snowmobile, rocks and cabins. That is roughly 10–15 assets.
+- Only the characters and props need to be designed: the yeti (player), penguin,
+  eagle, snowmobile, rocks and cabins. That is roughly 10–15 assets.
 - **Don't animate frame by frame.** Use one rigid pose per character (or a
   few parts) and animate in code: rotation, squash-and-stretch, a fluttering
   scarf. AI tools are still bad at consistent animation frames. The flip

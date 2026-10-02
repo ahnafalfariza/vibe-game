@@ -1,6 +1,7 @@
-# Selancar Ahay
+# Yeti, Set, Go!
 
 An endless downhill skiing game for the browser, inspired by *Ski Safari*.
+You play a yeti on skis, outrunning an avalanche.
 Portfolio / learning project. Not affiliated with the original.
 
 **Status: Phase 0 — feel prototype.** Endless procedural slope, jump,
