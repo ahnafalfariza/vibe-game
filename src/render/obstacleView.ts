@@ -64,7 +64,8 @@ export class ObstacleView {
   /** Show what's in [left, right] (world x); recycle the rest. */
   update(left: number, right: number, dt: number): void {
     this.time += dt;
-    const visible = (e: Entity) => e.x1 > left - MARGIN && e.x0 < right + MARGIN && !(e.kind === 'coin' && e.taken);
+    const visible = (e: Entity) =>
+      e.x1 > left - MARGIN && e.x0 < right + MARGIN && !(e.kind === 'coin' && e.taken) && !(e.kind === 'rock' && e.broken);
     for (const [e, g] of this.live) {
       if (visible(e)) continue;
       g.clear().setVisible(false);
@@ -92,10 +93,11 @@ export class ObstacleView {
     this.sparkle.explode(big ? 28 : 7, x, y);
   }
 
-  /** Something got hit: rock chips, or cabin splinters. */
-  hit(x: number, y: number, obstacle: Obstacle): void {
-    if (obstacle === 'rock') this.chips.explode(14, x, y - 20);
-    else this.splinters.explode(28, x, y - 60);
+  /** Something got hit: rock chips, or cabin splinters. Lots more when it's smashed to bits. */
+  hit(x: number, y: number, obstacle: Obstacle, smashed = false): void {
+    const k = smashed ? 3 : 1;
+    if (obstacle === 'rock') this.chips.explode(14 * k, x, y - 20);
+    else this.splinters.explode(28 * k, x, y - 60);
   }
 
   private acquire(e: Entity): Phaser.GameObjects.Graphics {

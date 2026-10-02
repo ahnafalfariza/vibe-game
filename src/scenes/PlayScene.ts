@@ -10,6 +10,8 @@ import { SkierView } from '../render/skierView';
 import { SnowSpray, Snowfall } from '../render/effects';
 import { AvalancheView } from '../render/avalancheView';
 import { ObstacleView } from '../render/obstacleView';
+import { MountView } from '../render/mountView';
+import { MOUNT_NAMES, type MountKind } from '../sim/mounts';
 import { palette } from '../render/palette';
 import { Hud } from '../ui/hud';
 import type { Tuner } from '../ui/tuner';
@@ -24,6 +26,8 @@ export interface GameContext {
   sfx: Sfx;
   /** From ?seed=… — replay the same mountain every run. */
   fixedSeed: number | null;
+  /** From ?mount=… — start every run riding this. */
+  startMount: MountKind | null;
   debug: boolean;
   touch: boolean;
   /** OS "reduce motion" setting: no camera shake or flicker. */
@@ -45,6 +49,17 @@ const AVALANCHE_MARGIN = 400;
 const AVALANCHE_SKIER_POS = 0.7;
 /** Time between being caught and the game-over screen, s. */
 const CAUGHT_DELAY = 1.3;
+/** Extra headroom when an eagle is carrying the yeti: the eagle is above it, world px. */
+const EAGLE_HEADROOM = 110;
+/** Wing beats while climbing, s apart. */
+const FLAP_EVERY = 0.4;
+/** Popup colour per mount. */
+const MOUNT_COLOR: Record<MountKind, number> = {
+  penguin: 0xbfe3ff,
+  eagle: palette.eagleBeak,
+  snowmobile: palette.sledBody,
+  bear: palette.bearFur,
+};
 
 /** menu: title screen over a demo run · playing · paused · over: caught, then the game-over screen. */
 type State = 'menu' | 'playing' | 'paused' | 'over';
@@ -69,6 +84,7 @@ export class PlayScene extends Phaser.Scene {
   private hud!: Hud;
   private avalancheView!: AvalancheView;
   private obstacleView!: ObstacleView;
+  private mountView!: MountView;
 
   // Per-run state (reset in create(): the scene instance is reused on restart).
   private state: State = 'menu';
@@ -83,6 +99,7 @@ export class PlayScene extends Phaser.Scene {
   private view = { x: 0, y: 0, zoomMul: 1, leadX: 0, leadY: 0 };
   private bgScroll = 0;
   private debugTimer = 0;
+  private flapTimer = 0;
 
   constructor(private readonly ctx: GameContext) {
     super('play');
@@ -94,7 +111,7 @@ export class PlayScene extends Phaser.Scene {
     this.state = play ? 'playing' : 'menu';
     this.best = loadBest();
     this.overTimer = 0;
-    this.run = new Run(seed, this.ctx.tuning, { avalanche: play });
+    this.run = new Run(seed, this.ctx.tuning, { avalanche: play, startMount: (play && this.ctx.startMount) || undefined });
     this.simEvents = [];
     this.accumulator = 0;
     this.pressed = false;
@@ -102,6 +119,7 @@ export class PlayScene extends Phaser.Scene {
     this.pointersDown = new Set();
     this.bgScroll = 0;
     this.debugTimer = 0;
+    this.flapTimer = 0;
     const sk = this.run.skier;
     this.prev = { x: sk.x, y: sk.y, angle: sk.angle };
     this.view = { x: sk.x, y: sk.y, zoomMul: 1, leadX: 0, leadY: 0 };
@@ -127,7 +145,10 @@ export class PlayScene extends Phaser.Scene {
     this.terrainView = new TerrainView(this, terrainLayer, this.run.terrain);
     this.spray = new SnowSpray(this, actorLayer);
     this.obstacleView = new ObstacleView(this, propLayer, this.run.spawner, this.run.terrain);
+    this.mountView = new MountView(this, propLayer, actorLayer, this.run.spawner);
+    // Depths in the actor layer: spray, the stack under the yeti, the yeti, an eagle carrying it.
     this.skierView = new SkierView(this, actorLayer);
+    this.skierView.container.setDepth(2);
     this.avalancheView = new AvalancheView(this, avalancheLayer, this.run.terrain);
     this.snowfall = new Snowfall(this, uiLayer);
     this.hud = new Hud(this, uiLayer, this.ctx.touch);
@@ -251,7 +272,16 @@ export class PlayScene extends Phaser.Scene {
     const halfW = width / zoom / 2;
     this.terrainView.update(this.view.x - halfW, this.view.x + halfW);
     this.obstacleView.update(this.view.x - halfW, this.view.x + halfW, dt);
+    const mounts = this.run.mounts;
+    const held = this.state === 'playing' && (this.keyHeld || this.pointersDown.size > 0);
+    this.mountView.update(this.run.spawner.mounts, mounts, x, y, angle, sk.velocity, held, this.view.x - halfW, this.view.x + halfW, dt);
+    this.skierView.ride(sk.lift);
     this.skierView.update(x, y, angle, sk.vx, sk.vy, sk.mode === 'crash', dt);
+    // Wing beats while an eagle climbs.
+    if (mounts.state === 'carried' && held && (this.flapTimer -= dt) <= 0) {
+      this.flapTimer = FLAP_EVERY;
+      this.ctx.sfx.flap();
+    }
     // Flicker while obstacles can't knock you down (just after getting up);
     // a steady fade instead with reduced motion.
     const invuln = sk.invulnTimer > 0 && sk.mode !== 'crash';
@@ -281,6 +311,9 @@ export class PlayScene extends Phaser.Scene {
         best: this.best,
         avalancheM: gap / PX_PER_METRE,
         coins: this.run.stats.coins,
+        stack: [...mounts.stack, ...(mounts.state === 'carried' ? (['eagle'] as const) : [])].map((k) => MOUNT_NAMES[k]),
+        eagle: mounts.state === 'carried' ? mounts.eagleTime / this.ctx.tuning.eagleTime : null,
+        fuel: mounts.stack[0] === 'snowmobile' ? mounts.fuel / this.ctx.tuning.snowmobileFuel : null,
       },
       dt,
     );
@@ -290,6 +323,7 @@ export class PlayScene extends Phaser.Scene {
       danger,
       playing: this.state !== 'menu',
       caught: this.run.caught,
+      engine: mounts.stack[0] === 'snowmobile' && !this.run.caught ? sk.velocity : 0,
     });
     this.updateDebug(dt, zoom);
   }
@@ -347,8 +381,8 @@ export class PlayScene extends Phaser.Scene {
       const land = this.predictLanding();
       right = Math.max(x, land.x);
       bottom = Math.max(y, land.y);
-      const apex = sk.vy < 0 ? y - (sk.vy * sk.vy) / (2 * this.ctx.tuning.gravity) : y;
-      top = apex - SKIER_HEADROOM;
+      const apex = sk.vy < 0 && !sk.carried ? y - (sk.vy * sk.vy) / (2 * this.ctx.tuning.gravity) : y;
+      top = apex - SKIER_HEADROOM - sk.lift - (sk.carried ? EAGLE_HEADROOM : 0);
     }
     // Keep a close avalanche in shot: seeing what's chasing you is the tension.
     // It's uphill, so the box grows upwards as well as backwards.
@@ -437,7 +471,7 @@ export class PlayScene extends Phaser.Scene {
         this.hud.popup(`+${e.points}` + (e.multiplier > 1 ? ` ×${e.multiplier}` : ''), sx, sy - 108 * u, 0xffffff, 24);
       } else if (e.type === 'hit') {
         const [sx, sy] = toScreen(e.x, e.y);
-        this.obstacleView.hit(e.x, e.y, e.obstacle);
+        this.obstacleView.hit(e.x, e.y, e.obstacle, e.saved === 'smash');
         this.spray.burst(e.x, e.y, e.obstacle === 'cabin' ? 36 : 20);
         sfx?.thud(e.obstacle);
         if (e.crashed) {
@@ -447,6 +481,31 @@ export class PlayScene extends Phaser.Scene {
         } else {
           this.shake(200, 0.005);
         }
+      } else if (e.type === 'mount') {
+        const [sx, sy] = toScreen(e.x, e.y);
+        this.spray.burst(e.x, e.y, 14);
+        if (sfx) this.hud.popup(`${MOUNT_NAMES[e.kind]}!`, sx, sy - 190 * u, MOUNT_COLOR[e.kind], 36);
+        sfx?.mount(e.kind);
+      } else if (e.type === 'dismount') {
+        const [sx, sy] = toScreen(e.x, e.y);
+        this.mountView.onEvent(e, this.run.mounts, this.run.skier.vx, this.run.skier.vy);
+        if (e.reason === 'rock' || e.reason === 'cabin' || e.reason === 'landing') {
+          // A shield gone: it took the hit for you.
+          if (sfx) this.hud.popup(`Lost the ${MOUNT_NAMES[e.kind].toLowerCase()}!`, sx, sy - 170 * u, 0xffd6a5, 30);
+          this.spray.burst(e.x, e.y, 24);
+          this.shake(260, 0.007);
+          sfx?.shieldBreak();
+        } else if (e.reason === 'fuel') {
+          if (sfx) this.hud.popup('Out of fuel!', sx, sy - 170 * u, 0xffd6a5, 28);
+          sfx?.sputter();
+        } else if (e.reason === 'release') {
+          sfx?.flap();
+        }
+      } else if (e.type === 'smash') {
+        const [sx, sy] = toScreen(e.x, e.y);
+        if (sfx) this.hud.popup('Smash!', sx, sy - 200 * u, palette.bearFur, 40);
+        this.shake(300, 0.01);
+        sfx?.roar();
       } else if (e.type === 'coin') {
         this.obstacleView.collect(e.x, e.y);
         sfx?.coin(e.index);
@@ -490,6 +549,10 @@ export class PlayScene extends Phaser.Scene {
         `body ${deg(sk.angle)}°  slope ${deg(Math.atan(s.dy))}°  spin ${deg(sk.airRotation)}°  h ${sk.heightAboveGround().toFixed(0)}px${s.ice ? '  ICE' : ''}`,
         `feature ${this.run.terrain.featureAt(sk.x)?.kind ?? '-'}   x ${sk.x.toFixed(0)}`,
         `entities rock ${counts.rock}  cabin ${counts.cabin}  ice ${counts.ice}  coin ${counts.coin}   next ${next}`,
+        `ride ${this.run.mounts.state} [${this.run.mounts.stack.join(' > ') || '-'}]  lift ${sk.lift}` +
+          (this.run.mounts.eagleTime > 0 ? `  eagle ${this.run.mounts.eagleTime.toFixed(1)}s` : '') +
+          (this.run.mounts.stack[0] === 'snowmobile' ? `  fuel ${this.run.mounts.fuel.toFixed(1)}s` : '') +
+          `   waiting ${this.run.spawner.mounts.filter((m) => !m.taken && m.x > sk.x).map((m) => `${m.kind}+${(m.x - sk.x).toFixed(0)}`).join(' ') || '-'}`,
       ].join('\n'),
     );
   }
