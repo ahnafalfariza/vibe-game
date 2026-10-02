@@ -54,6 +54,16 @@ export interface Tuning {
   avalancheAccel: number;
   /** The avalanche is never further behind than this, px — you can't escape it for good. */
   avalancheMaxGap: number;
+  /** Snow friction on an ice patch (replaces groundFriction there). */
+  iceFriction: number;
+  /** Ground drag on ice, as a fraction of normal drag. */
+  iceDrag: number;
+  /** Speed added for grabbing every coin in a cluster, px/s. */
+  coinClusterBoost: number;
+  /** After getting back up from a crash, obstacles can't hit you for this long, s. */
+  hitInvulnTime: number;
+  /** Scales how often rocks, cabins and ice are placed (0 = none). */
+  obstacleDensity: number;
 }
 
 export const DEFAULT_TUNING: Readonly<Tuning> = Object.freeze({
@@ -83,6 +93,11 @@ export const DEFAULT_TUNING: Readonly<Tuning> = Object.freeze({
   avalancheSpeed: 500,
   avalancheAccel: 6,
   avalancheMaxGap: 2400,
+  iceFriction: 0.003,
+  iceDrag: 0.4,
+  coinClusterBoost: 300,
+  hitInvulnTime: 0.8,
+  obstacleDensity: 1,
 });
 
 export function createTuning(overrides: Partial<Tuning> = {}): Tuning {
