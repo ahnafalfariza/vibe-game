@@ -99,7 +99,9 @@ export class Background {
     }
     for (const ridge of this.ridges) {
       ridge.scale = (height * ridge.heightFrac) / ridge.texH;
-      for (const tile of ridge.tiles) tile.setScale(ridge.scale);
+      // A whole number of px wide, so neighbouring tiles meet exactly: a
+      // fractional width left a 1 px seam (glaring on a dark forest).
+      for (const tile of ridge.tiles) tile.setScale(Math.ceil(TEX_W * ridge.scale) / TEX_W, ridge.scale);
     }
   }
 
@@ -111,7 +113,7 @@ export class Background {
     const w = this.width;
     const h = this.height;
     for (const ridge of this.ridges) {
-      const tileW = TEX_W * ridge.scale;
+      const tileW = Math.ceil(TEX_W * ridge.scale);
       const offset = -(((scrollPx * ridge.parallax) % tileW) + tileW) % tileW;
       const bottom = h * ridge.anchor + lift * ridge.parallax * 2;
       ridge.tiles.forEach((tile, i) => tile.setPosition(Math.floor(offset + i * tileW), bottom));
