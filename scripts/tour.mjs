@@ -3,13 +3,14 @@
 // Usage: bun run build && node scripts/tour.mjs
 import { chromium } from 'playwright';
 import { spawn } from 'node:child_process';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, existsSync } from 'node:fs';
 
 mkdirSync('screenshots', { recursive: true });
-const server = spawn('bunx', ['vite', 'preview', '--port', '4175', '--strictPort'], { stdio: 'ignore' });
+const port = process.env.PORT ?? '4175';
+const server = spawn('bunx', ['vite', 'preview', '--port', port, '--strictPort'], { stdio: 'ignore' });
 await new Promise((r) => setTimeout(r, 2500));
 const browser = await chromium.launch({
-  executablePath: '/opt/pw-browsers/chromium',
+  executablePath: ['/opt/pw-browsers/chromium', process.env.CHROMIUM_PATH].find((p) => p && existsSync(p)),
   args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'],
 });
 const [w, h, dpr] = (process.env.VIEW ?? '1280x720x1').split('x').map(Number);
@@ -20,7 +21,7 @@ page.on('pageerror', (e) => errors.push(e.message));
 // each (software-rendered) frame takes for real.
 await page.clock.install({ time: 0 });
 await page.clock.pauseAt(1000);
-await page.goto(`http://localhost:4175/?seed=${process.env.SEED ?? 7}${process.env.DEBUG ? '&debug' : ''}`);
+await page.goto(`http://localhost:${port}/?seed=${process.env.SEED ?? 7}${process.env.DEBUG ? '&debug' : ''}`);
 // Let fonts/boot finish on the fake clock.
 for (let i = 0; i < 40 && !(await page.evaluate(() => !!window.__game?.scene?.getScene('play')?.run)); i++) {
   await page.clock.runFor(100);

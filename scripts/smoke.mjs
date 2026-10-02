@@ -11,8 +11,9 @@ mkdirSync(outDir, { recursive: true });
 let server = null;
 let url = process.argv[2];
 if (!url) {
-  server = spawn('bunx', ['vite', 'preview', '--port', '4173', '--strictPort'], { stdio: 'ignore' });
-  url = 'http://localhost:4173/?seed=7';
+  const port = process.env.PORT ?? '4173';
+  server = spawn('bunx', ['vite', 'preview', '--port', port, '--strictPort'], { stdio: 'ignore' });
+  url = `http://localhost:${port}/?seed=7`;
   await new Promise((r) => setTimeout(r, 2500));
 }
 
