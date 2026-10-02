@@ -4,7 +4,7 @@
 // context is created on the first tap / key press (the title screen's Play
 // button is usually that gesture).
 
-const MUTE_KEY = 'selancar-ahay.muted';
+const MUTE_KEY = 'yeti-set-go.muted';
 /** Major pentatonic, in semitones: any run of these notes sounds happy. */
 const SCALE = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24, 26, 28];
 

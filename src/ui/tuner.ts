@@ -5,7 +5,7 @@ import { DEFAULT_TUNING, type Tuning } from '../tuning';
 // survives reloads; "Copy values" puts JSON on the clipboard to paste into
 // tuning.ts once you're happy.
 
-const STORAGE_KEY = 'selancar-ahay.tuning';
+const STORAGE_KEY = 'yeti-set-go.tuning';
 
 type Range = [min: number, max: number, step: number];
 
