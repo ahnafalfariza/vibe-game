@@ -1,18 +1,24 @@
 import Phaser from 'phaser';
 import { palette } from './palette';
 
-// The skier, drawn from flat shapes. One rigid pose plus procedural motion
-// (rotation, squash-and-stretch, tumbling, a fluttering scarf) instead of
-// frame-by-frame animation — cheap, crisp at any zoom, and easy to restyle.
+// The player: a yeti on skis, drawn from flat shapes. One rigid pose plus
+// procedural motion (rotation, squash-and-stretch, tumbling, a fluttering
+// scarf) instead of frame-by-frame animation — cheap, crisp at any zoom, and
+// easy to restyle.
 
 /** The body rotates around this point, measured up from the feet, px (before SCALE). */
 const PIVOT_UP = 30;
 /** Spin speed while tumbling after a crash, rad/s. */
 const TUMBLE_SPEED = 13;
-/** Drawn a bit larger than life so the skier reads well when the camera zooms out. */
+/** Drawn a bit larger than life so the yeti reads well when the camera zooms out. */
 const SCALE = 1.25;
+/** Outline width around the yeti's silhouette, px. Pale fur needs it on pale snow. */
+const LINE = 2.2;
+/** Where the scarf tails leave the knot, feet-relative px. */
+const NECK: Pt = [-6, -41];
 
 type Pt = [number, number];
+type Part = [color: number, pts: Pt[]];
 
 export class SkierView {
   readonly container: Phaser.GameObjects.Container;
@@ -23,7 +29,7 @@ export class SkierView {
 
   constructor(scene: Phaser.Scene, layer: Phaser.GameObjects.Layer) {
     const body = scene.add.graphics();
-    drawSkier(body);
+    drawYeti(body);
     this.scarf = scene.add.graphics();
     this.container = scene.add.container(0, 0, [this.scarf, body]);
     layer.add(this.container);
@@ -72,23 +78,23 @@ export class SkierView {
     const dir = worldDir - rotation;
     const stretch = Math.min(1, 0.35 + speed / 1400);
     const tails: [number, number][] = [
-      [34, 0],
-      [24, 1.7],
+      [36, 0],
+      [26, 1.7],
     ];
     for (const [len, phase] of tails) {
       const n = 7;
       const left: Phaser.Math.Vector2[] = [];
       const right: Phaser.Math.Vector2[] = [];
-      // Neck position (feet-relative -2, -48), shifted into pivot space.
-      const ox = -2;
-      const oy = -48 + PIVOT_UP;
+      // Knot position, shifted into pivot space.
+      const ox = NECK[0];
+      const oy = NECK[1] + PIVOT_UP;
       for (let i = 0; i <= n; i++) {
         const t = i / n;
         const along = t * len * stretch;
         const wave = Math.sin(this.time * 22 + phase - t * 5) * 4 * t;
         const cx = ox + Math.cos(dir) * along - Math.sin(dir) * wave;
         const cy = oy + Math.sin(dir) * along + Math.cos(dir) * wave;
-        const w = 3.2 * (1 - t * 0.55);
+        const w = 3.4 * (1 - t * 0.55);
         const nx = -Math.sin(dir) * w;
         const ny = Math.cos(dir) * w;
         left.push(new Phaser.Math.Vector2(cx + nx, cy + ny));
@@ -100,25 +106,76 @@ export class SkierView {
   }
 }
 
-/** Draw the skier facing right with the pivot at (0, 0) (feet at y = PIVOT_UP). */
-function drawSkier(g: Phaser.GameObjects.Graphics): void {
+/** Ellipse (or circle) as a polygon, optionally rotated, feet-relative. */
+function ell(cx: number, cy: number, rx: number, ry = rx, rot = 0, n = 20): Pt[] {
+  const c = Math.cos(rot);
+  const s = Math.sin(rot);
+  return Array.from({ length: n }, (_, i) => {
+    const a = (i / n) * Math.PI * 2;
+    const x = Math.cos(a) * rx;
+    const y = Math.sin(a) * ry;
+    return [cx + x * c - y * s, cy + x * s + y * c];
+  });
+}
+
+/** A rounded limb from (ax, ay) to (bx, by), radius r. */
+function limb(ax: number, ay: number, bx: number, by: number, r: number): Pt[] {
+  const a = Math.atan2(by - ay, bx - ax);
+  const pts: Pt[] = [];
+  for (let i = 0; i <= 8; i++) {
+    const t = a - Math.PI / 2 + (i / 8) * Math.PI;
+    pts.push([bx + Math.cos(t) * r, by + Math.sin(t) * r]);
+  }
+  for (let i = 0; i <= 8; i++) {
+    const t = a + Math.PI / 2 + (i / 8) * Math.PI;
+    pts.push([ax + Math.cos(t) * r, ay + Math.sin(t) * r]);
+  }
+  return pts;
+}
+
+/** A pointed fur tuft, base centred on (x, y), `w` wide, pointing at angle `a` (y down). */
+function tuft(x: number, y: number, a: number, len = 7, w = 4): Pt[] {
+  const c = Math.cos(a);
+  const s = Math.sin(a);
+  return [
+    [x - s * w, y + c * w],
+    [x + c * len, y + s * len],
+    [x + s * w, y - c * w],
+  ];
+}
+
+/** Tufts sticking out of an ellipse at the given angles, degrees (y down, 180 = back). */
+function tufts(cx: number, cy: number, rx: number, ry: number, degs: number[], len = 7, w = 4): Part[] {
+  return degs.map((d) => {
+    const a = (d * Math.PI) / 180;
+    return [palette.fur, tuft(cx + Math.cos(a) * rx * 0.8, cy + Math.sin(a) * ry * 0.8, a, len, w)];
+  });
+}
+
+/** Draw the yeti facing right with the pivot at (0, 0) (feet at y = PIVOT_UP). */
+function drawYeti(g: Phaser.GameObjects.Graphics): void {
   const o = PIVOT_UP;
-  const poly = (color: number, pts: Pt[]) => {
+  const vec = (pts: Pt[]) => pts.map(([x, y]) => new Phaser.Math.Vector2(x, y + o));
+  const fill = (color: number, pts: Pt[]) => {
     g.fillStyle(color, 1);
-    g.fillPoints(
-      pts.map(([x, y]) => new Phaser.Math.Vector2(x, y + o)),
-      true,
-    );
+    g.fillPoints(vec(pts), true);
+  };
+  // A group of parts sharing one outline: stroke every part first, then fill
+  // them all, so the line only shows around the group's silhouette.
+  const outlined = (parts: Part[]) => {
+    g.lineStyle(LINE * 2, palette.furLine, 1);
+    g.fillStyle(palette.furLine, 1);
+    for (const [, pts] of parts) {
+      const v = vec(pts);
+      g.strokePoints(v, true);
+      // WebGL strokes have no joins; round off the corners of sharp polygons.
+      if (v.length < 18) for (const p of v) g.fillCircle(p.x, p.y, LINE);
+    }
+    for (const [color, pts] of parts) fill(color, pts);
   };
 
-  // Pole, trailing behind (drawn first so the arm covers it).
-  g.lineStyle(3, palette.pole, 1);
-  g.lineBetween(17, -29 + o, -24, -7 + o);
-  g.fillStyle(palette.pole, 1);
-  g.fillCircle(-24, -7 + o, 3);
-
   // Skis with an upturned tip.
-  poly(palette.skis, [
+  fill(palette.skis, [
     [-42, -5],
     [36, -5],
     [44, -10],
@@ -127,70 +184,59 @@ function drawSkier(g: Phaser.GameObjects.Graphics): void {
     [-42, -1],
   ]);
 
-  // Boots.
-  g.fillStyle(palette.ink, 1);
-  g.fillRoundedRect(-9, -13 + o, 17, 9, 3);
-
-  // Legs, knees bent.
-  poly(palette.pants, [
-    [-9, -11],
-    [7, -11],
-    [11, -19],
-    [4, -28],
-    [-9, -27],
-    [-12, -19],
+  // Far arm, swung back.
+  outlined([
+    [palette.furShade, limb(-5, -40, -18, -28, 5)],
+    [palette.furShade, tuft(-12, -31, 2.2, 6, 4)],
+    [palette.face, ell(-20, -26, 4.5)],
   ]);
 
-  // Jacket, leaning forward, with a shaded back.
-  poly(palette.jacket, [
-    [-10, -26],
-    [7, -27],
-    [13, -39],
-    [5, -47],
-    [-8, -46],
-    [-13, -36],
-  ]);
-  poly(palette.jacketShade, [
-    [-10, -26],
-    [-3, -26],
-    [-6, -45],
-    [-8, -46],
-    [-13, -36],
+  // Body: big boots, shaggy legs, a round furry torso, a big head on top.
+  outlined([
+    [palette.boots, [[-12, -4], [16, -4], [19, -8], [15, -13], [-11, -14], [-13, -9]]],
+    [palette.fur, limb(-3, -24, 1, -16, 8.5)],
+    [palette.fur, [[-12, -20], [12, -20], [13, -14], [10, -10], [7, -14], [4, -10], [1, -14], [-2, -10], [-5, -14], [-8, -10], [-11, -14]]],
+    ...tufts(-2, -31, 17, 18, [125, 150, 175, 200, 225], 7, 5),
+    [palette.fur, ell(-2, -31, 17, 18, -0.15, 24)],
+    ...tufts(8, -56, 17, 15.5, [150, 178, 206], 7, 4.5),
+    [palette.fur, ell(8, -56, 17, 15.5)],
   ]);
 
-  // Arm reaching forward, mitten.
-  poly(palette.jacket, [
-    [3, -44],
-    [9, -45],
-    [19, -31],
-    [14, -28],
+  // Pale belly.
+  fill(palette.furLight, ell(5, -28, 9, 10.5, -0.15));
+
+  // Face: dark patch, big eyes, a toothy grin.
+  fill(palette.face, ell(13.5, -53, 10.5, 8.5));
+  for (const ex of [9.5, 17.5]) {
+    fill(palette.eye, ell(ex, -54.5, 3.6, 4.3, 0, 14));
+    fill(palette.ink, ell(ex + 1, -54, 2.2, 2.4, 0, 12));
+    fill(palette.eye, ell(ex + 1.7, -55.2, 0.9, 0.9, 0, 8));
+  }
+  fill(palette.ink, [
+    [10.5, -50.3],
+    [18.5, -50.3],
+    [17, -48],
+    [12, -48],
   ]);
-  g.fillStyle(palette.beanie, 1);
-  g.fillCircle(17, -29 + o, 4.5);
+  fill(palette.eye, [
+    [12, -50.3],
+    [14, -50.3],
+    [13, -48.7],
+  ]);
 
-  // Scarf knot around the neck.
-  g.fillStyle(palette.scarf, 1);
-  g.fillRoundedRect(-6, -50 + o, 16, 6, 3);
+  // Scarf knot; beanie with a pompom to match the scarf.
+  outlined([[palette.scarf, limb(-7, -41, 14, -41, 3.4)]]);
+  outlined([
+    [palette.beanie, ell(8, -63, 17, 10, 0, 24).filter(([, y]) => y <= -63 + 0.01)],
+    [palette.beanieCuff, limb(-9, -63, 25, -63, 3.6)],
+    [palette.scarf, ell(1, -74, 4.5)],
+  ]);
 
-  // Head.
-  g.fillStyle(palette.skin, 1);
-  g.fillCircle(5, -57 + o, 11);
-  g.fillStyle(0xff9e9e, 0.7);
-  g.fillCircle(12, -52 + o, 2.6);
-
-  // Beanie: dome, cuff and pompom.
-  g.fillStyle(palette.beanie, 1);
-  g.slice(4, -59 + o, 12, Math.PI, 0, false);
-  g.fillPath();
-  g.fillRoundedRect(-8, -62 + o, 25, 6, 3);
-  g.fillStyle(palette.pompom, 1);
-  g.fillCircle(-1, -72 + o, 5);
-
-  // Goggles.
-  g.fillStyle(palette.goggles, 1);
-  g.fillRoundedRect(3, -59 + o, 15, 8, 3);
-  g.fillStyle(palette.lens, 1);
-  g.fillRoundedRect(6, -58 + o, 10, 5.5, 2);
-  g.fillStyle(0xffffff, 0.9);
-  g.fillRect(8, -57 + o, 3, 1.6);
+  // Near arm reaching forward, with shaggy fur at the wrist and a dark paw.
+  outlined([
+    [palette.fur, limb(4, -36, 17, -25, 5)],
+    [palette.fur, tuft(13, -24, 1.9, 6, 4)],
+    [palette.fur, tuft(18, -22, 1.4, 5, 3)],
+    [palette.face, ell(21, -22, 4.5)],
+  ]);
 }
