@@ -36,16 +36,18 @@ try {
     await page.waitForFunction(() => window.__game?.scene?.getScene('play')?.run, null, { timeout: 15000 });
     await page.waitForTimeout(1000);
     await page.screenshot({ path: `${outDir}/${name}-0-title.png` });
-    // Biome picker: the demo run behind the title switches right away, and the choice is remembered.
+    // Biome picker: the demo run behind the title switches right away. Twilight Pines is
+    // locked until rank 3, so on a fresh profile it's only a preview: not remembered, not playable.
     await page.click('#overlay [data-act="biome-next"]');
     await page.waitForTimeout(800);
     const picked = await page.evaluate(() => ({
       biome: window.__game.scene.getScene('play').ctx.biome,
       saved: localStorage.getItem('yeti-set-go.biome'),
       cameras: window.__game.scene.getScene('play').cameras.cameras.length,
+      playable: !document.querySelector('#overlay .title [data-act="play"]').disabled,
     }));
     await page.screenshot({ path: `${outDir}/${name}-0b-biome.png` });
-    if (picked.biome === 'alpine' || picked.saved !== picked.biome || picked.cameras !== 3) errors.push(`[${name}] bad biome pick ${JSON.stringify(picked)}`);
+    if (picked.biome !== 'twilight' || picked.saved !== null || picked.playable || picked.cameras !== 3) errors.push(`[${name}] bad biome pick ${JSON.stringify(picked)}`);
     await page.click('#overlay [data-act="biome-prev"]');
     await page.waitForTimeout(500);
     // Title screen → play.
@@ -107,6 +109,52 @@ try {
     await page.waitForTimeout(800);
     const home = await scene();
     if (home.state !== 'menu' || !home.screen?.includes('title')) errors.push(`[${name}] bad return to title ${JSON.stringify(home)}`);
+
+    // Meta: Goals and Shop panels, buying with granted coins (?coins=), and the purchase changing the next run.
+    const profile = () => page.evaluate(() => JSON.parse(localStorage.getItem('yeti-set-go.profile') ?? 'null'));
+    const panel = () =>
+      page.evaluate(() => ({
+        screen: document.querySelector('#overlay .screen:not([hidden])')?.className ?? null,
+        focus: document.activeElement?.closest('.screen')?.className ?? document.activeElement?.tagName,
+        focusAct: document.activeElement?.dataset?.act ?? null,
+      }));
+    await page.goto(`${url}&coins=5000`);
+    await page.waitForFunction(() => window.__game?.scene?.getScene('play')?.run, null, { timeout: 15000 });
+    await page.waitForTimeout(500);
+    const before = await profile();
+    if (before?.coins !== 5000) errors.push(`[${name}] ?coins=5000 gave ${JSON.stringify(before)}`);
+    await page.click('#overlay [data-act="goals"]');
+    await page.waitForTimeout(300);
+    const goals = await panel();
+    const goalRows = await page.locator('#overlay .goals .goal').count();
+    await page.screenshot({ path: `${outDir}/${name}-6-goals.png` });
+    if (!goals.screen?.includes('goals') || !goals.focus?.includes('goals') || goalRows !== 3) errors.push(`[${name}] bad goals panel ${JSON.stringify({ goals, goalRows })}`);
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(200);
+    const closed = await panel();
+    if (!closed.screen?.includes('title') || closed.focusAct !== 'goals') errors.push(`[${name}] Esc did not close goals ${JSON.stringify(closed)}`);
+    await page.click('#overlay [data-act="shop"]');
+    await page.waitForTimeout(300);
+    const shop = await panel();
+    if (!shop.screen?.includes('shop') || !shop.focus?.includes('shop')) errors.push(`[${name}] bad shop panel ${JSON.stringify(shop)}`);
+    await page.click('#overlay [data-act="buy"][data-id="headStart"]');
+    await page.waitForTimeout(200);
+    await page.screenshot({ path: `${outDir}/${name}-7-shop.png` });
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(200);
+    if (!(await panel()).screen?.includes('title')) errors.push(`[${name}] Esc did not close the shop`);
+    // Reload without the grant: the purchase stuck, the demo run behind the title is untouched, the next run starts on a snowmobile.
+    await page.goto(url);
+    await page.waitForFunction(() => window.__game?.scene?.getScene('play')?.run, null, { timeout: 15000 });
+    await page.waitForTimeout(500);
+    const after2 = await profile();
+    if (after2?.upgrades?.headStart !== 1 || after2?.coins !== 4600) errors.push(`[${name}] purchase did not persist ${JSON.stringify(after2)}`);
+    const demoStack = await page.evaluate(() => window.__game.scene.getScene('play').run.mounts.stack.join('+'));
+    if (demoStack !== '') errors.push(`[${name}] the demo run got a start mount: ${demoStack}`);
+    await page.click('#overlay [data-act="play"]');
+    await page.waitForFunction(() => window.__game.scene.getScene('play').state === 'playing', null, { timeout: 5000 });
+    const runStack = await page.evaluate(() => window.__game.scene.getScene('play').run.mounts.stack.join('+'));
+    if (runStack !== 'snowmobile') errors.push(`[${name}] Head start did not change the run: stack "${runStack}"`);
     await page.close();
   }
 } finally {

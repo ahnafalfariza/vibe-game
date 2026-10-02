@@ -5,7 +5,6 @@ import { createTuning, type Tuning } from '../src/tuning';
 import type { RunEvent } from '../src/sim/run';
 import type { Cluster } from '../src/sim/spawner';
 import { MOUNT_KINDS, type MountKind, type WildMount } from '../src/sim/mounts';
-import type { RunStats } from '../src/sim/run';
 import { BIOMES, findBiome } from '../src/biomes';
 
 const spawns = (findBiome(process.env.BIOME ?? null) ?? BIOMES[0]).spawns;
@@ -140,8 +139,8 @@ function simulate(name: string, bot: Bot, seed: number, seconds: number) {
   return { hits: hits.rock + hits.cabin, coins: st.coins, clusters: st.clusters, passed, offered, rides, shields: st.shieldsLost, smashes: st.smashes };
 }
 
-/** Seconds until the avalanche catches the bot (capped at 5 minutes). */
-function survive(bot: Bot, seed: number, tuning: Tuning = createTuning(), startMount?: MountKind, stats?: RunStats[]): string {
+/** Seconds until the avalanche catches the bot (capped at 5 minutes). Finished runs go in `runs`. */
+function survive(bot: Bot, seed: number, tuning: Tuning = createTuning(), startMount?: MountKind, runs?: Run[]): string {
   const run = new Run(seed, tuning, { startMount, table: spawns });
   let prevHeld = false;
   let minGap = Infinity;
@@ -152,7 +151,7 @@ function survive(bot: Bot, seed: number, tuning: Tuning = createTuning(), startM
     run.step(input, []);
     if (t < 10) minGap = Math.min(minGap, run.avalancheGap());
   }
-  stats?.push(run.stats);
+  runs?.push(run);
   return Math.round(run.time) + (minGap < 150 ? ` (gap ${minGap.toFixed(0)}px in first 10s!)` : '');
 }
 
@@ -174,9 +173,10 @@ for (const [name, t] of totals) {
   );
 }
 const survival = new Map<string, number[]>();
+const finished: Run[] = [];
 for (const seed of [1, 2, 3, 4, 5]) {
   const row = BOTS.map(([name, make]) => {
-    const s = survive(make(), seed);
+    const s = survive(make(), seed, undefined, undefined, finished);
     survival.set(name, [...(survival.get(name) ?? []), parseInt(s)]);
     return `${name} ${s}s`;
   });
@@ -184,14 +184,16 @@ for (const seed of [1, 2, 3, 4, 5]) {
 }
 const mean = (v: number[]) => (v.reduce((a, b) => a + b, 0) / v.length).toFixed(0);
 console.log('avalanche mean survival: ' + [...survival].map(([n, v]) => `${n} ${mean(v)}s`).join('  '));
+// What the shop prices (sim/meta.ts UPGRADES) are set against.
+console.log(`   per run: ${mean(finished.map((r) => r.stats.coins))} coins, ${mean(finished.map((r) => r.distancePx() / 40))} m, score ${mean(finished.map((r) => r.score))}`);
 // The same without mounts, for comparison.
 const bare = BOTS.map(([name, make]) => `${name} ${mean([1, 2, 3, 4, 5].map((seed) => parseInt(survive(make(), seed, createTuning({ mountDensity: 0 })))))}s`);
 console.log('   … without mounts: ' + bare.join('  '));
 // Starting on each mount (the rank perk / shop item): the hopper, over the same seeds.
 const starts = MOUNT_KINDS.map((kind) => {
-  const stats: RunStats[] = [];
-  const times = [1, 2, 3, 4, 5].map((seed) => parseInt(survive(hopper(), seed, createTuning(), kind, stats)));
-  const sum = (f: (s: RunStats) => number) => stats.reduce((n, s) => n + f(s), 0);
+  const runs: Run[] = [];
+  const times = [1, 2, 3, 4, 5].map((seed) => parseInt(survive(hopper(), seed, createTuning(), kind, runs)));
+  const sum = (f: (s: Run['stats']) => number) => runs.reduce((n, r) => n + f(r.stats), 0);
   return `${kind} ${mean(times)}s (shields lost ${sum((s) => s.shieldsLost)}, smashes ${sum((s) => s.smashes)}, rode ${sum((s) => MOUNT_KINDS.reduce((n, k) => n + s.rides[k], 0))} more)`;
 });
 console.log('hopper starting on a mount: ' + starts.join('  '));
