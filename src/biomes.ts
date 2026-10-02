@@ -1,6 +1,8 @@
 import { applyPalette, type PaletteKey } from './render/palette';
 import { ALPINE, type SpawnKind, type SpawnTable } from './sim/spawner';
 import type { FeatureKind } from './sim/terrain';
+import { biomeUnlocked } from './sim/meta';
+import { getProfile } from './profile';
 
 // Biomes: the same game on a different mountain. A biome repaints the world
 // (palette overrides; the yeti keeps its own colours), dresses the backdrop,
@@ -129,9 +131,16 @@ export function applyBiome(id: string): Biome {
   return active;
 }
 
-/** Can this biome be played? Every biome is open for now; ranks will gate them here. */
+/** Biome forced by ?biome= (for testing): playable whatever the rank. */
+let forced: string | null = null;
+
+export function forceBiome(id: string): void {
+  forced = id;
+}
+
+/** Can this biome be played? Rank perks unlock them (sim/meta.ts PERKS). */
 export function isBiomeUnlocked(id: string): boolean {
-  return findBiome(id) !== undefined;
+  return findBiome(id) !== undefined && (id === forced || biomeUnlocked(id, getProfile().rank));
 }
 
 const BIOME_KEY = 'yeti-set-go.biome';
