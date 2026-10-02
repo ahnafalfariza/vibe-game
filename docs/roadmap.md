@@ -8,6 +8,23 @@ Legend: ✅ done · 🟡 partial · ⬜ not started · ❓ decision needed
 
 ---
 
+## Next up
+
+Proposed order for the rest of Phase 1. Folds in adjustments 1, 2, 3 and 6
+from the end of this file.
+
+1. **Deploy** (GitHub Pages or Vercel). Static Vite build; Pages needs `base` in `vite.config.ts`.
+2. **Real-phone test** on the deployed URL: iOS audio unlock, touch latency, orientation.
+3. **Yeti player art** in `src/render/skierView.ts`, drawn in code. Sets the silhouette and hitbox that obstacles are designed around.
+4. **Phase 0 gate sign-off:** a quick "is 60 s fun?" playtest before content piles on.
+5. **Obstacles** via `src/sim/spawner.ts`: rock, then ice patch, then cabin (rideable roof is the hardest). Keep it pure sim so Vitest and the probe bots cover it.
+6. **Music loop.**
+
+Still open: coins (❓ Phase 1 or move to Phase 3 with the shop) and the tough
+mount (❓ needed before Phase 2).
+
+---
+
 ## Phase 0 — Feel prototype ✅
 
 **Gate:** "Is 60 seconds of just this fun?" Never formally signed off; Phase 1
