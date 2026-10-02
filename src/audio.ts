@@ -19,6 +19,8 @@ export interface AmbienceState {
   playing: boolean;
   /** The avalanche got you: the music fades out until the next run or title screen. */
   caught: boolean;
+  /** Riding a snowmobile at this speed, px/s (0: no engine). */
+  engine?: number;
 }
 
 export class Sfx {
@@ -133,6 +135,7 @@ export class Sfx {
     this.wind.gain.gain.setTargetAtTime((0.02 + (s.grounded ? 0.1 : 0.22) * v) * vol, now, 0.2);
     this.wind.filter.frequency.setTargetAtTime(300 + 900 * v, now, 0.2);
     this.rumble.gain.setTargetAtTime(s.playing ? 1.4 * s.danger * s.danger : 0, now, 0.15);
+    this.engineBed(s.playing ? (s.engine ?? 0) : 0);
     this.music.state = s;
   }
 
@@ -226,6 +229,88 @@ export class Sfx {
     this.tone('sine', 120, 45, 0.25, 0.7);
     if (obstacle === 'rock') this.noiseBurst(0.12, 'bandpass', 1800, 600, 0.45);
     else this.noiseBurst(0.35, 'bandpass', 700, 250, 0.6);
+  }
+
+  // ---- Mounts ----
+
+  /** Climbed aboard: a little fanfare, its own shape per mount. */
+  mount(kind: 'penguin' | 'eagle' | 'snowmobile' | 'bear'): void {
+    const tunes = { penguin: [0, 4, 7, 12], eagle: [7, 12, 16, 19], snowmobile: [0, 7, 12, 7, 12], bear: [-12, -5, 0, 7] };
+    const wave: OscillatorType = kind === 'bear' ? 'sawtooth' : kind === 'snowmobile' ? 'square' : 'triangle';
+    tunes[kind].forEach((semi, i) => {
+      const f = 659.25 * 2 ** (semi / 12);
+      this.tone(wave, f, f, 0.14, kind === 'bear' || kind === 'snowmobile' ? 0.07 : 0.17, i * 0.07);
+      this.tone('sine', f * 2, f * 2, 0.1, 0.05, i * 0.07);
+    });
+  }
+
+  /** A mount took the hit and is gone: a crack and a falling whistle. */
+  shieldBreak(): void {
+    this.noiseBurst(0.22, 'highpass', 5000, 1500, 0.35);
+    this.tone('triangle', 880, 220, 0.35, 0.2);
+    this.tone('sine', 140, 50, 0.2, 0.5);
+  }
+
+  /** One beat of an eagle's wings: a soft whoosh. */
+  flap(): void {
+    this.noiseBurst(0.16, 'bandpass', 500, 1400, 0.3);
+  }
+
+  /** A polar bear smashing through: a roar over a crunch. */
+  roar(): void {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(95, t);
+    osc.frequency.linearRampToValueAtTime(140, t + 0.15);
+    osc.frequency.exponentialRampToValueAtTime(60, t + 0.7);
+    // Growl: wobble the pitch fast.
+    const lfo = ctx.createOscillator();
+    lfo.frequency.value = 28;
+    const depth = ctx.createGain();
+    depth.gain.value = 18;
+    lfo.connect(depth).connect(osc.frequency);
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 900;
+    osc.connect(filter).connect(envelope(ctx, t, 0.75, 0.45)).connect(this.master);
+    for (const o of [osc, lfo]) {
+      o.start(t);
+      o.stop(t + 0.8);
+    }
+    this.noiseBurst(0.5, 'lowpass', 2500, 200, 0.5);
+  }
+
+  /** The snowmobile runs dry: a few coughs. */
+  sputter(): void {
+    for (let i = 0; i < 4; i++) this.tone('square', 90 - i * 12, 50, 0.08, 0.12, i * 0.13);
+  }
+
+  private engine?: { gain: GainNode; osc: OscillatorNode; filter: BiquadFilterNode };
+
+  /** The snowmobile's engine: a buzzy drone whose pitch follows the speed (0: off). */
+  private engineBed(speed: number): void {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    if (!this.engine) {
+      const osc = ctx.createOscillator();
+      osc.type = 'sawtooth';
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.Q.value = 4;
+      const gain = ctx.createGain();
+      gain.gain.value = 0;
+      osc.connect(filter).connect(gain).connect(this.master);
+      osc.start();
+      this.engine = { gain, osc, filter };
+    }
+    const now = ctx.currentTime;
+    const v = Math.min(1, speed / 2600);
+    this.engine.gain.gain.setTargetAtTime(speed > 0 ? 0.05 + 0.05 * v : 0, now, 0.1);
+    this.engine.osc.frequency.setTargetAtTime(55 + 90 * v, now, 0.08);
+    this.engine.filter.frequency.setTargetAtTime(400 + 1400 * v, now, 0.1);
   }
 }
 

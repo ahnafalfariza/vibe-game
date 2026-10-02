@@ -67,7 +67,7 @@ describe('Avalanche', () => {
   });
 
   it('is off in a run without one', () => {
-    const run = new Run(1, createTuning({ minSpeed: 0, maxSpeed: 0 }), false);
+    const run = new Run(1, createTuning({ minSpeed: 0, maxSpeed: 0 }), { avalanche: false });
     for (let i = 0; i < 120 * 20; i++) run.step(idle, []);
     expect(run.caught).toBe(false);
   });

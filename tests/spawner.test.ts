@@ -105,11 +105,12 @@ describe('Fairness', () => {
 
   it('never makes a rider who just rides come down on a rock or fly into a cabin wall', () => {
     // A rider who moves exactly like the spawner's idle ghost: never knocked
-    // down, no cluster boosts, ice that isn't slick. Riding into things on the
-    // snow is fine (they were in plain view); landing on them is not.
-    const tuning = createTuning({ coinClusterBoost: 0, iceFriction: 0.03, iceDrag: 1 });
+    // down, no cluster boosts, ice that isn't slick, no mounts to ride. Riding
+    // into things on the snow is fine (they were in plain view); landing on
+    // them is not.
+    const tuning = createTuning({ coinClusterBoost: 0, iceFriction: 0.03, iceDrag: 1, mountDensity: 0 });
     for (let seed = 1; seed <= 8; seed++) {
-      const run = new Run(seed, tuning, false, true);
+      const run = new Run(seed, tuning, { avalanche: false, obstacles: true });
       const sk = run.skier;
       const events: RunEvent[] = [];
       for (let t = 0; t < 90; t += SIM_DT) {
@@ -129,7 +130,7 @@ describe('Fairness', () => {
 
 describe('Obstacles', () => {
   it('a rock on the snow knocks you down, then you get a moment of invulnerability', () => {
-    const run = new Run(1, createTuning(), false, true);
+    const run = new Run(1, createTuning(), { avalanche: false, obstacles: true });
     run.scoring.multiplier = 4;
     const rock = (x: number) => ({ kind: 'rock', x0: x - 34, x1: x + 34, x, y: run.terrain.height(x) - 7, r: 34 }) as const;
     run.spawner.add(rock(400));
@@ -150,7 +151,7 @@ describe('Obstacles', () => {
   });
 
   it('a rock can be jumped', () => {
-    const run = new Run(1, createTuning(), false, true);
+    const run = new Run(1, createTuning(), { avalanche: false, obstacles: true });
     run.spawner.add({ kind: 'rock', x0: 566, x1: 634, x: 600, y: run.terrain.height(600) - 7, r: 34 });
     stepUntil(run, 3, () => run.skier.x > 600 - run.skier.speed * 0.3);
     const events = stepUntil(run, 1.5, () => false, { held: false, pressed: true });
@@ -159,7 +160,7 @@ describe('Obstacles', () => {
   });
 
   it('running into a cabin wall crashes and smashes through it', () => {
-    const run = new Run(1, createTuning(), false, true);
+    const run = new Run(1, createTuning(), { avalanche: false, obstacles: true });
     const cabin = cabinOnRunUp(run);
     const events = stepUntil(run, 3, (es) => es.some((e) => e.type === 'hit'));
     expect(events.find((e) => e.type === 'hit')).toMatchObject({ obstacle: 'cabin', crashed: true });
@@ -172,7 +173,7 @@ describe('Obstacles', () => {
   });
 
   it('flying into a cabin below its roof hits the wall instead of popping up onto the roof', () => {
-    const run = new Run(1, createTuning(), false, true);
+    const run = new Run(1, createTuning(), { avalanche: false, obstacles: true });
     const cabin = cabinOnRunUp(run);
     const sk = run.skier;
     Object.assign(sk, { mode: 'air', x: 200, y: run.terrain.height(200) - 40, vx: 900, vy: -100 });
@@ -183,7 +184,7 @@ describe('Obstacles', () => {
   });
 
   it('landing on a cabin roof is like landing on the snow: ride it, then roll off the end', () => {
-    const run = new Run(1, createTuning(), false, true);
+    const run = new Run(1, createTuning(), { avalanche: false, obstacles: true });
     const cabin = cabinOnRunUp(run);
     const roof = (x: number) => cabin.y0 + (x - cabin.x0) * cabin.m;
     const sk = run.skier;
@@ -207,8 +208,8 @@ describe('Obstacles', () => {
   });
 
   it('ice is slick: you pick up more speed on it', () => {
-    const plain = new Run(1, createTuning(), false, true);
-    const icy = new Run(1, createTuning(), false, true);
+    const plain = new Run(1, createTuning(), { avalanche: false, obstacles: true });
+    const icy = new Run(1, createTuning(), { avalanche: false, obstacles: true });
     icy.spawner.add({ kind: 'ice', x0: -100, x1: 700 });
     expect(icy.spawner.sample(100).ice).toBe(true);
     expect(plain.spawner.sample(100).ice).toBeUndefined();
@@ -220,7 +221,7 @@ describe('Obstacles', () => {
 
 describe('Coins', () => {
   function withCoins(xs: number[], lift = 34) {
-    const run = new Run(1, createTuning(), false, true);
+    const run = new Run(1, createTuning(), { avalanche: false, obstacles: true });
     const cluster = { size: xs.length, got: 0, x1: xs[xs.length - 1] };
     for (const x of xs) run.spawner.add({ kind: 'coin', x0: x - 14, x1: x + 14, x, y: run.terrain.height(x) - lift, cluster, taken: false });
     return run;
