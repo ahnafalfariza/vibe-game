@@ -4,11 +4,12 @@ An endless downhill skiing game for the browser, inspired by *Ski Safari*.
 You play a yeti on skis, outrunning an avalanche.
 Portfolio / learning project. Not affiliated with the original.
 
-**Status: Phase 1 built (real-phone test pending).** Endless procedural slope, jump, hold-to-backflip,
-landing judgement, crash and recover, an avalanche chasing you, rocks, cabins
-with rideable roofs, ice patches, coin clusters, score with a trick
+**Status: Phases 1–2 built (real-phone test pending).** Endless procedural
+slope, jump, hold-to-backflip, landing judgement, crash and recover, an
+avalanche chasing you, rocks, cabins with rideable roofs, ice patches, coin
+clusters, mounts (penguin, eagle, snowmobile, polar bear), score with a trick
 multiplier, synthesised sound and music, and title / pause / game-over
-screens. No animals yet. See [`docs/research.md`](docs/research.md) for the
+screens. See [`docs/research.md`](docs/research.md) for the
 plan and [`docs/roadmap.md`](docs/roadmap.md) for progress.
 
 ## Run it
@@ -25,6 +26,7 @@ Handy URL parameters:
 | `?seed=123` | Same mountain every run (great for comparing tuning changes) |
 | `?debug` | Show the debug overlay |
 | `?tune` | Open the tuning panel on load |
+| `?mount=penguin` | Start every run riding a mount (`penguin`, `eagle`, `snowmobile`, `bear`) |
 
 ## Controls
 
@@ -45,7 +47,15 @@ give you a speed boost; landing badly is a wipeout.
 Stay ahead of the avalanche: it speeds up the longer you ski, and a wipeout
 lets it catch up. Jump rocks, ride over cabin roofs (hit the wall and you
 wipe out), and use ice patches to pick up speed. Grab every coin in a cluster
-for a speed boost; coins are saved across runs for the shop. Score is 1 point per metre plus trick points. A clean flip
+for a speed boost; coins are saved across runs for the shop.
+
+Ski into animals to ride them. A **penguin** glides and flips faster, an
+**eagle** carries you through the air for a few seconds (hold to climb), a
+**snowmobile** roars along on a tank of fuel and can carry an animal too, and
+a **polar bear** smashes straight through rocks and cabins. Anything you ride
+is a shield: a hit knocks it off instead of wiping you out.
+
+Score is 1 point per metre plus trick points. A clean flip
 scores 100 (2 flips 300, 3 flips 600) and raises the multiplier by the
 number of flips, up to ×10. A sloppy landing or a crash resets it to ×1.
 
@@ -64,10 +74,11 @@ src/
     terrain.ts    Endless mountain from shaped templates, joined with Hermite curves
     spawner.ts    Rocks, cabins, ice and coin clusters per terrain feature, placed fairly
     skier.ts      Custom skier physics: ground / air / crash, landing judgement, hits
+    mounts.ts     The mount stack, shields, eagle flight, fuel, and per-mount feel
     run.ts        One run: fixed 120 Hz step, avalanche, stats
     score.ts      Trick points and the multiplier
     rng.ts        Seeded PRNG
-  render/       Phaser views of the sim (terrain chunks, yeti, obstacles, avalanche, sky, particles)
+  render/       Phaser views of the sim (terrain chunks, yeti, mounts, obstacles, avalanche, sky, particles)
   ui/           HUD, DOM menus (title / pause / game over) and the tuning panel
   audio.ts      Every sound and the music loop, synthesised with WebAudio (no audio files)
   wallet.ts     Lifetime coin total in localStorage
