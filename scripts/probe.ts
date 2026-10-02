@@ -39,8 +39,8 @@ function lipJumper(): Bot {
   };
 }
 
-/** Seconds of warning the hopper takes before jumping a rock or cabin it sees coming. */
-const HOP_LEAD = 0.3;
+/** How long before reaching it the hopper jumps a rock, or onto a cabin roof, s. */
+const HOP_LEAD = { rock: 0.3, cabin: 0.45 };
 
 // The lip jumper, plus: hops (no flip) over rocks and onto cabins it sees coming.
 function hopper(): Bot {
@@ -52,7 +52,7 @@ function hopper(): Bot {
     for (const e of run.spawner.entities) {
       if (e.kind !== 'rock' && (e.kind !== 'cabin' || e.broken)) continue;
       const d = e.x0 - s.x;
-      if (d > 0 && d < s.velocity * HOP_LEAD) return { held: false, pressed: true };
+      if (d > 0 && d < s.velocity * HOP_LEAD[e.kind]) return { held: false, pressed: true };
     }
     return input;
   };
@@ -75,7 +75,7 @@ function simulate(name: string, bot: Bot, seed: number, seconds: number) {
   const takeoffs: number[] = [];
   const kinds = new Map<string, number>();
   const air = new Map<string, number[]>();
-  const hits = { rock: 0, cabin: 0, airborne: 0 };
+  const hits = { rock: 0, cabin: 0, airborne: 0, roofs: 0 };
   const clusters = new Set<Cluster>();
   let lastKind = '?';
   for (let t = 0; t < seconds; t += SIM_DT) {
@@ -98,6 +98,7 @@ function simulate(name: string, bot: Bot, seed: number, seconds: number) {
         if (wasAir) hits.airborne++;
       }
       if (e.type === 'land') {
+        if (run.terrain.height(e.x) - e.y > 50) hits.roofs++;
         const k = `${e.quality}${e.flips ? `+${e.flips}flip` : ''}`;
         kinds.set(k, (kinds.get(k) ?? 0) + 1);
         if (e.airTime > 0.25) {
@@ -115,7 +116,7 @@ function simulate(name: string, bot: Bot, seed: number, seconds: number) {
       `bestAir=${st.bestAirTime.toFixed(2)}s takeoffs=${takeoffs.length} landings=${JSON.stringify(Object.fromEntries(kinds))}`,
   );
   console.log(
-    `   hits rock=${hits.rock} cabin=${hits.cabin} (from the air ${hits.airborne})  coins=${st.coins}  clusters ${st.clusters}/${passed}` +
+    `   hits rock=${hits.rock} cabin=${hits.cabin} (from the air ${hits.airborne})  roof landings=${hits.roofs}  coins=${st.coins}  clusters ${st.clusters}/${passed}` +
       (passed ? ` (${Math.round((100 * st.clusters) / passed)}%)` : ''),
   );
   if (name === 'idle' || name === 'lipjump') {
