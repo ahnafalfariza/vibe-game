@@ -1634,6 +1634,7 @@ kbd.held {
 }
 
 .base {
+  display: flow-root;
   padding: 0 16px calc(48px + env(safe-area-inset-bottom));
   background: #8f9bd6;
   color: var(--ink);
