@@ -31,7 +31,9 @@ bun install
 bun run dev        # http://localhost:5173 — also reachable from your phone on the same Wi-Fi
 ```
 
-Handy URL parameters:
+`/` is the landing page; the game itself lives at `/play/`.
+
+Handy URL parameters (on `/play/`):
 
 | Param | Effect |
 |---|---|
@@ -91,6 +93,8 @@ When something feels right, hit **Copy values** and paste them into
 ## Project layout
 
 ```
+index.html      Landing page (src/landing.ts, src/landing.css); the yeti on it is ported from skierView.ts
+play/index.html The game
 src/
   sim/          Pure TypeScript game logic. No Phaser, fully unit-tested.
     terrain.ts    Endless mountain from shaped templates, joined with Hermite curves

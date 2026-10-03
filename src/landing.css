@@ -1,0 +1,1746 @@
+/* The landing page (index.html). The page is the mountain: sunny summit at
+   the top, trail by trail down into Twilight Pines, then the lodge.
+   Colours come from src/render/palette.ts. */
+
+:root {
+  --ink: #243049;
+  --sky-top: #5fa8e8;
+  --sky-bottom: #d9f0ff;
+  --snow: #f7fbff;
+  --band1: #e3edf9;
+  --band2: #c9daf1;
+  --band3: #adc4e6;
+  --orange: #ff7a45;
+  --orange-dark: #e0602f;
+  --yellow: #ffc93c;
+  --pink: #ef476f;
+  --green: #3fbf74;
+  --blue: #2f6fd6;
+  --wood: #b07a52;
+  --wood-dark: #87583a;
+  --night-top: #161a45;
+  --night-bottom: #6b58a8;
+  --paper: #fffaf0;
+  --pop: 0 4px 0 var(--ink);
+  /* How far each trail's top edge drops from left to right. */
+  --tilt: clamp(40px, 7vw, 110px);
+  --font: Fredoka, 'Trebuchet MS', system-ui, sans-serif;
+  --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--night-top);
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  overflow-x: clip;
+  background: var(--sky-top);
+  color: var(--ink);
+  font: 500 18px/1.5 var(--font);
+}
+
+h1,
+h2,
+h3 {
+  font-weight: 600;
+  line-height: 1.02;
+  text-wrap: balance;
+}
+
+h2 {
+  max-width: 16ch;
+  margin: 0 0 0.45em;
+  font-size: clamp(34px, 5vw, 60px);
+  letter-spacing: -0.01em;
+}
+
+h3 {
+  margin: 0 0 0.3em;
+  font-size: clamp(24px, 3vw, 34px);
+}
+
+p {
+  max-width: 50ch;
+  text-wrap: pretty;
+}
+
+a {
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 3px solid var(--yellow);
+  outline-offset: 3px;
+}
+
+/* ---- Game-style buttons (same as src/style.css) ---- */
+
+.btn {
+  display: inline-block;
+  padding: 0.45em 1.4em;
+  border: 3px solid var(--ink);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--ink);
+  font: 600 22px/1.2 var(--font);
+  text-decoration: none;
+  box-shadow: var(--pop);
+}
+
+.btn:hover {
+  filter: brightness(1.06);
+}
+
+.btn:active {
+  translate: 0 3px;
+  box-shadow: 0 1px 0 var(--ink);
+}
+
+.btn.primary {
+  background: var(--orange);
+  color: #fff;
+  text-shadow: 0 2px 0 var(--orange-dark);
+}
+
+.btn.big {
+  font-size: clamp(24px, 2.4vw, 32px);
+}
+
+/* ---- HUD: metres down the page, scroll speed, the avalanche ---- */
+
+.hud {
+  position: fixed;
+  z-index: 20;
+  top: max(12px, env(safe-area-inset-top));
+  left: max(16px, env(safe-area-inset-left));
+  display: grid;
+  justify-items: start;
+  color: #fff;
+  font-weight: 600;
+  line-height: 1.05;
+  font-variant-numeric: tabular-nums;
+  -webkit-text-stroke: 5px var(--ink);
+  paint-order: stroke fill;
+  pointer-events: none;
+}
+
+.hud-score {
+  font-size: clamp(30px, 4vw, 44px);
+}
+
+.hud-sub {
+  font-size: 17px;
+  -webkit-text-stroke-width: 4px;
+}
+
+.hud-warn {
+  color: #ff9db0;
+  font-size: 17px;
+  -webkit-text-stroke-width: 4px;
+}
+
+.play-pill {
+  position: fixed;
+  z-index: 20;
+  top: max(12px, env(safe-area-inset-top));
+  right: max(16px, env(safe-area-inset-right));
+  display: flex;
+  align-items: center;
+  gap: 0.45em;
+  padding: 0.3em 0.35em 0.3em 1em;
+  border: 3px solid var(--ink);
+  border-radius: 999px;
+  background: var(--orange);
+  color: #fff;
+  font-weight: 600;
+  font-size: 19px;
+  text-decoration: none;
+  text-shadow: 0 2px 0 var(--orange-dark);
+  box-shadow: var(--pop);
+  transition:
+    translate 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
+    opacity 0.2s,
+    visibility 0.3s;
+}
+
+.play-pill i {
+  width: 1.5em;
+  aspect-ratio: 1;
+  border: 2.5px solid var(--ink);
+  border-radius: 50%;
+  background: #fff;
+}
+
+.play-pill i::after {
+  content: '';
+  display: block;
+  width: 40%;
+  height: 46%;
+  margin: 27% 0 0 34%;
+  background: var(--ink);
+  clip-path: polygon(0 0, 100% 50%, 0 100%);
+}
+
+:root:not(.past-summit) .play-pill {
+  translate: 0 -150%;
+  opacity: 0;
+  visibility: hidden;
+}
+
+/* The avalanche: creeps down from the top when you stop scrolling (landing.ts). */
+.chaser {
+  position: fixed;
+  z-index: 15;
+  inset: 0 0 auto;
+  height: 26vh;
+  pointer-events: none;
+  translate: 0 calc((var(--aval, 0) - 1) * 100%);
+  /* Three rows of puffs on different periods, so the edge never looks tiled. */
+  background:
+    radial-gradient(circle 44px at 50% 36px, #fff 97%, #fff0) 0 100% / 98px 80px repeat-x,
+    radial-gradient(circle 30px at 50% 30px, #fff 97%, #fff0) 40px calc(100% - 26px) / 70px 60px repeat-x,
+    radial-gradient(circle 62px at 50% 62px, var(--band1) 97%, #fff0) 20px calc(100% - 30px) / 150px 124px repeat-x,
+    linear-gradient(#fff, var(--band1)) top / 100% calc(100% - 70px) no-repeat;
+  filter: drop-shadow(0 6px 0 rgb(36 48 73 / 0.18));
+  animation: churn 3s linear infinite;
+}
+
+@keyframes churn {
+  to {
+    background-position-x: 98px, -30px, -150px, 0;
+  }
+}
+
+/* ---- The summit ---- */
+
+.summit {
+  position: relative;
+  min-height: max(100svh, 680px);
+  overflow: hidden;
+  isolation: isolate;
+  background: linear-gradient(var(--sky-top), var(--sky-bottom) 72%);
+}
+
+.sun {
+  position: absolute;
+  top: 8%;
+  right: 8%;
+  width: clamp(90px, 11vw, 160px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: #fff4d6;
+  box-shadow:
+    0 0 0 clamp(20px, 2.6vw, 38px) rgb(255 255 255 / 0.2),
+    0 0 0 clamp(46px, 6vw, 86px) rgb(255 255 255 / 0.1);
+}
+
+.cloud {
+  position: absolute;
+  fill: #fff;
+  aspect-ratio: 200 / 90;
+  animation: drift 70s ease-in-out infinite alternate;
+}
+
+.c1 {
+  top: 6%;
+  left: 44%;
+  width: clamp(120px, 14vw, 210px);
+}
+
+.c2 {
+  top: 25%;
+  left: 49%;
+  width: clamp(90px, 10vw, 150px);
+  opacity: 0.85;
+  animation-duration: 55s;
+  animation-direction: alternate-reverse;
+}
+
+.c3 {
+  top: 37%;
+  left: 87%;
+  width: clamp(110px, 12vw, 180px);
+  animation-duration: 85s;
+}
+
+@keyframes drift {
+  to {
+    translate: -12vw 0;
+  }
+}
+
+.range {
+  position: absolute;
+  left: 0;
+  bottom: 12%;
+  width: 100%;
+  height: 46%;
+}
+
+.flakes {
+  position: absolute;
+  z-index: 3;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    radial-gradient(2.5px 2.5px at 30px 40px, #fff 98%, #fff0),
+    radial-gradient(1.8px 1.8px at 150px 120px, #fff 98%, #fff0),
+    radial-gradient(3px 3px at 230px 250px, #fff 98%, #fff0),
+    radial-gradient(1.8px 1.8px at 90px 300px, #fff 98%, #fff0),
+    radial-gradient(2.2px 2.2px at 260px 30px, #fff 98%, #fff0);
+  background-size: 290px 340px;
+  animation: snowfall 16s linear infinite;
+}
+
+@keyframes snowfall {
+  to {
+    background-position: -90px 340px;
+  }
+}
+
+.hero-copy {
+  position: relative;
+  z-index: 2;
+  padding: clamp(96px, 13vh, 150px) 16px 0;
+  pointer-events: none;
+}
+
+.hero-copy a {
+  pointer-events: auto;
+}
+
+.wordmark {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  margin: 0 0 0.45em;
+  color: #fff;
+  font-size: clamp(64px, min(9.5vw, 13vh), 136px);
+  font-weight: 700;
+  line-height: 0.86;
+  letter-spacing: -0.01em;
+  -webkit-text-stroke: 0.09em var(--ink);
+  paint-order: stroke fill;
+  text-shadow: 0 0.07em 0 var(--ink);
+  rotate: -4deg;
+}
+
+.wordmark span:nth-child(2) {
+  margin-left: 0.5em;
+}
+
+.wordmark span:nth-child(3) {
+  margin-left: 1.05em;
+  color: var(--yellow);
+}
+
+.lede {
+  max-width: 30ch;
+  margin: 0 0 26px;
+  font-size: clamp(18px, 1.6vw, 22px);
+  line-height: 1.4;
+}
+
+.cta-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.cta-note {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.35;
+  opacity: 0.8;
+}
+
+/* The slope. Its rim runs from 30% down on the left to 70% on the right of
+   .snowfield, so anything with --x (0–100) stands on it at that x. */
+.snowfield {
+  position: absolute;
+  z-index: 1;
+  inset: auto 0 0;
+  height: 44%;
+  container-type: size;
+  pointer-events: none;
+}
+
+.snow {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.snowfield > [style*='--x'],
+.hero-yeti,
+.signpost {
+  position: absolute;
+  left: calc(var(--x) * 1%);
+  top: calc((30 + 0.4 * var(--x)) * 1%);
+}
+
+.pine {
+  width: calc(var(--s) * clamp(34px, 3.6vw, 52px));
+  aspect-ratio: 40 / 72;
+  translate: -50% -96%;
+}
+
+.hero-yeti {
+  --x: 78;
+  --y: 36;
+  top: calc(var(--y) * 1%);
+  width: clamp(130px, 17vw, 270px);
+  aspect-ratio: 104 / 88;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  /* Feet at (--x, --y), skis lined up with the slope for the landing. */
+  translate: -50% -94%;
+  transform-origin: 48% 94%;
+  rotate: atan2(40cqh, 100cqw);
+}
+
+.hero-yeti svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  transform-origin: 50% 55%;
+  animation: hang 1.6s ease-in-out infinite alternate;
+}
+
+/* Held down: keeps flipping (landing.ts stops it on a whole turn). */
+.hero-yeti.flip svg {
+  animation:
+    hang 1.6s ease-in-out infinite alternate,
+    backflip 0.5s linear infinite;
+}
+
+@keyframes hang {
+  to {
+    translate: 0 -7%;
+  }
+}
+
+@keyframes backflip {
+  to {
+    rotate: -360deg;
+  }
+}
+
+.trick {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  translate: -50% 0;
+  color: var(--yellow);
+  font-weight: 700;
+  font-size: clamp(18px, 1.8vw, 26px);
+  white-space: nowrap;
+  -webkit-text-stroke: 6px var(--ink);
+  paint-order: stroke fill;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.trick.show {
+  animation: trick 1.4s ease-out;
+}
+
+@keyframes trick {
+  0% {
+    opacity: 0;
+    translate: -50% 20%;
+    scale: 0.7;
+  }
+  12% {
+    opacity: 1;
+    scale: 1.12;
+  }
+  25% {
+    scale: 1;
+  }
+  75% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    translate: -50% -60%;
+  }
+}
+
+.spray i {
+  position: absolute;
+  bottom: 4%;
+  left: 8%;
+  width: 14%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: #fff;
+  opacity: 0;
+  animation: puff 0.9s ease-out infinite;
+}
+
+.spray i:nth-child(2) {
+  animation-delay: 0.22s;
+  width: 10%;
+}
+
+.spray i:nth-child(3) {
+  animation-delay: 0.45s;
+}
+
+.spray i:nth-child(4) {
+  animation-delay: 0.68s;
+  width: 8%;
+}
+
+@keyframes puff {
+  0% {
+    opacity: 0.9;
+    translate: 0 0;
+    scale: 0.4;
+  }
+  100% {
+    opacity: 0;
+    translate: -160% -60%;
+    scale: 1.2;
+  }
+}
+
+/* Trailhead signpost: one arrow board per trail. */
+.signpost {
+  --x: 22;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding-bottom: 54px;
+  translate: -50% calc(-100% + 16px);
+  pointer-events: auto;
+}
+
+.signpost::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  top: -8px;
+  bottom: 0;
+  left: 50%;
+  width: 14px;
+  translate: -50% 0;
+  border: 3px solid var(--ink);
+  border-radius: 4px 4px 0 0;
+  background: var(--wood-dark);
+}
+
+/* Snow piled at its foot and on its cap. */
+.signpost::after {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  left: 50%;
+  width: 70px;
+  height: 22px;
+  translate: -50% 0;
+  border-radius: 50% 50% 0 0;
+  background: var(--snow);
+}
+
+.board {
+  --notch: 0.9em;
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  min-width: 11.5em;
+  padding: 0.4em calc(var(--notch) + 0.5em) 0.4em 0.75em;
+  background: var(--ink);
+  color: #fff;
+  font-weight: 600;
+  font-size: clamp(14px, 1.2vw, 17px);
+  line-height: 1.1;
+  text-decoration: none;
+  white-space: nowrap;
+  text-shadow: 0 2px 0 rgb(36 48 73 / 0.6);
+  clip-path: polygon(0 0, calc(100% - var(--notch)) 0, 100% 50%, calc(100% - var(--notch)) 100%, 0 100%);
+  translate: 0.9em 0;
+  transition: translate 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.board::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: 3px 4px 3px 3px;
+  background:
+    repeating-linear-gradient(176deg, #0000 0 6px, rgb(0 0 0 / 0.07) 6px 8px),
+    var(--wood);
+  clip-path: inherit;
+}
+
+.board.left {
+  padding: 0.4em 0.75em 0.4em calc(var(--notch) + 0.5em);
+  clip-path: polygon(var(--notch) 0, 100% 0, 100% 100%, var(--notch) 100%, 0 50%);
+  translate: -0.9em 0;
+}
+
+.board.left::before {
+  inset: 3px 3px 3px 4px;
+}
+
+.board:hover {
+  translate: 1.4em 0;
+}
+
+.board.left:hover {
+  translate: -1.4em 0;
+}
+
+/* Trail difficulty symbols. */
+.sym {
+  flex: none;
+  width: 0.85em;
+  height: 0.85em;
+  outline: 2px solid #fff;
+}
+
+.green .sym {
+  border-radius: 50%;
+  background: var(--green);
+}
+
+.blue .sym {
+  background: var(--blue);
+}
+
+.black .sym,
+.double .sym {
+  background: #111;
+  rotate: 45deg;
+  scale: 0.8;
+}
+
+.double .sym {
+  margin-right: 0.85em;
+  box-shadow: 0.75em -0.75em 0 #111;
+}
+
+/* ---- Trails: each one slopes into the next ---- */
+
+.run {
+  position: relative;
+  margin-top: calc(-1 * var(--tilt));
+  padding: calc(var(--tilt) + clamp(48px, 7vw, 90px)) 16px clamp(80px, 11vw, 140px);
+  clip-path: polygon(0 0, 100% var(--tilt), 100% 100%, 0 100%);
+}
+
+.run-inner {
+  position: relative;
+  max-width: 1120px;
+  margin: 0 auto;
+}
+
+.split {
+  display: grid;
+  gap: clamp(36px, 5vw, 72px);
+}
+
+@media (min-width: 900px) {
+  .split {
+    grid-template-columns: 1.05fr 1fr;
+    align-items: center;
+  }
+}
+
+.trail-sign {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6em;
+  margin: 0 0 22px;
+  padding: 0.35em 0.9em 0.35em 0.7em;
+  border: 3px solid var(--ink);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ink);
+  box-shadow: var(--pop);
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  rotate: -2deg;
+}
+
+.trail-sign .sym {
+  outline: 0;
+  font-size: 1.15em;
+}
+
+.trail-sign small {
+  padding-left: 0.7em;
+  border-left: 2px solid var(--band2);
+  font-size: 0.75em;
+  letter-spacing: 0.12em;
+  opacity: 0.6;
+}
+
+.card {
+  border: 3px solid var(--ink);
+  border-radius: 22px;
+  background: #fff;
+  box-shadow: 0 6px 0 var(--ink);
+}
+
+/* Screenshots, taped up like postcards. */
+.postcard {
+  position: relative;
+  max-width: 440px;
+  margin: 0;
+  padding: 10px 10px 0;
+  border: 3px solid var(--ink);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--ink);
+  box-shadow: 0 5px 0 var(--ink);
+  rotate: var(--r, 2deg);
+  transition:
+    rotate 0.25s,
+    translate 0.25s;
+}
+
+.postcard:hover {
+  rotate: 0deg;
+  translate: 0 -4px;
+}
+
+.postcard::before {
+  content: '';
+  position: absolute;
+  top: -13px;
+  left: 50%;
+  width: 92px;
+  height: 26px;
+  translate: -50% 0;
+  rotate: -4deg;
+  background: rgb(255 201 60 / 0.75);
+}
+
+.postcard img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 2px;
+}
+
+.postcard figcaption {
+  padding: 7px 4px 9px;
+  font-weight: 600;
+  font-size: 15px;
+}
+
+/* ---- Bunny Hill ---- */
+
+.bunny {
+  background: var(--snow);
+}
+
+.steps {
+  display: grid;
+  gap: 0;
+  margin: 30px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.steps li {
+  display: grid;
+  grid-template-columns: 9em 1fr;
+  gap: 18px;
+  align-items: center;
+  padding: 16px 0;
+  border-top: 3px dashed var(--band2);
+}
+
+.steps b {
+  font-weight: 600;
+}
+
+.keys {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  opacity: 0.9;
+}
+
+kbd {
+  display: inline-block;
+  padding: 0.15em 0.65em;
+  border: 3px solid var(--ink);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--ink);
+  font: 600 17px/1.3 var(--font);
+  box-shadow: var(--pop);
+}
+
+kbd.held {
+  translate: 0 3px;
+  background: var(--yellow);
+  box-shadow: 0 1px 0 var(--ink);
+}
+
+@media (max-width: 520px) {
+  .steps li {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+}
+
+.judge {
+  margin: 0;
+  padding: 18px 20px 20px;
+  rotate: 1deg;
+}
+
+.judge figcaption {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 4px 12px;
+}
+
+.judge-title {
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  opacity: 0.6;
+}
+
+.judge-verdict {
+  font-weight: 700;
+  font-size: clamp(26px, 3vw, 34px);
+  line-height: 1;
+}
+
+.judge[data-q='clean'] .judge-verdict {
+  color: #23955a;
+}
+
+.judge[data-q='sloppy'] .judge-verdict {
+  color: #c27b00;
+}
+
+.judge[data-q='crash'] .judge-verdict {
+  color: #d9304f;
+}
+
+.judge svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 6px 0 4px;
+}
+
+.zone {
+  opacity: 0.25;
+  transition: opacity 0.2s;
+}
+
+.zone.clean {
+  fill: #5fd38d;
+}
+
+.zone.sloppy {
+  fill: var(--yellow);
+}
+
+.zone.crash {
+  fill: var(--pink);
+}
+
+.judge[data-q='clean'] .zone.clean,
+.judge[data-q='sloppy'] .zone.sloppy,
+.judge[data-q='crash'] .zone.crash {
+  opacity: 0.75;
+}
+
+.judge-control {
+  display: grid;
+  gap: 6px;
+  font-size: 16px;
+}
+
+.judge-control output {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.judge-control input {
+  width: 100%;
+  margin: 0;
+  accent-color: var(--orange);
+}
+
+.judge-note {
+  min-height: 2.7em;
+  margin: 10px 0 0;
+  font-size: 15px;
+  line-height: 1.35;
+  opacity: 0.8;
+}
+
+/* ---- Penguin Pass ---- */
+
+.penguin {
+  background: var(--band1);
+}
+
+.rentals-wrap {
+  display: grid;
+  gap: 34px 28px;
+  margin-top: 36px;
+}
+
+.rentals {
+  position: relative;
+  padding: 24px clamp(18px, 3vw, 34px) 22px;
+  border: 3px solid var(--ink);
+  border-radius: 14px;
+  background: repeating-linear-gradient(180deg, #5e3d2c 0 52px, #4c3123 52px 56px);
+  color: #fbeedd;
+  box-shadow: 0 6px 0 var(--ink);
+  rotate: -0.6deg;
+}
+
+/* Two screws holding it to the wall. */
+.rentals::before,
+.rentals::after {
+  content: '';
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #c9b9a6;
+  box-shadow: inset -2px -2px 0 rgb(0 0 0 / 0.3);
+}
+
+.rentals::after {
+  left: auto;
+  right: 12px;
+}
+
+.rentals-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 14px;
+  max-width: none;
+  margin: 0 0 12px;
+  color: var(--yellow);
+  font-weight: 700;
+  font-size: clamp(30px, 4vw, 44px);
+  letter-spacing: 0.08em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.rentals-head span {
+  color: #fbeedd;
+  font-weight: 500;
+  font-size: 15px;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  opacity: 0.75;
+}
+
+.rentals dl {
+  margin: 0;
+}
+
+.rentals dl > div {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 10px 0;
+}
+
+.rentals dt {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: baseline;
+  gap: 10px;
+  font-weight: 600;
+  font-size: clamp(20px, 2.2vw, 26px);
+  white-space: nowrap;
+}
+
+.rentals dt::after {
+  content: '';
+  flex: 1;
+  min-width: 20px;
+  border-bottom: 3px dotted rgb(251 238 221 / 0.45);
+}
+
+.rentals dd {
+  flex: 0 1 58%;
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.3;
+  text-align: right;
+}
+
+.rentals-foot {
+  max-width: none;
+  margin: 14px 0 0;
+  padding-top: 14px;
+  border-top: 2px solid rgb(251 238 221 / 0.25);
+  color: var(--yellow);
+  font-size: 16px;
+}
+
+.p-eagle {
+  --r: 3deg;
+}
+
+.p-bear {
+  --r: -2.5deg;
+  justify-self: end;
+}
+
+.p-sled {
+  --r: 1.5deg;
+}
+
+@media (max-width: 559px) {
+  .rentals dl > div {
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .rentals dt::after {
+    display: none;
+  }
+
+  .rentals dd {
+    text-align: left;
+  }
+
+  .postcard {
+    width: 92%;
+  }
+}
+
+@media (min-width: 900px) {
+  .rentals-wrap {
+    grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .rentals {
+    grid-row: span 3;
+    position: sticky;
+    top: 110px;
+  }
+
+  .p-bear,
+  .p-sled {
+    margin-top: -40px;
+  }
+}
+
+/* ---- Avalanche Alley ---- */
+
+.alley {
+  background: var(--band2);
+}
+
+/* The avalanche, piled up along the left edge. */
+.avalanche-wall {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: clamp(60px, 8vw, 140px);
+  background:
+    radial-gradient(circle 44px at 50px 50%, #fff 97%, #fff0) right 0 top 0 / 100px 98px repeat-y,
+    radial-gradient(circle 30px at 36px 50%, #fff 97%, #fff0) right 24px top 40px / 72px 70px repeat-y,
+    radial-gradient(circle 62px at 64px 50%, var(--band1) 97%, #fff0) right 30px top 10px / 128px 150px repeat-y,
+    linear-gradient(90deg, #fff, var(--band1)) left / calc(100% - 70px) 100% no-repeat;
+  animation: tumble 6s linear infinite;
+}
+
+@keyframes tumble {
+  to {
+    background-position-y: 98px, -70px, 150px, 0;
+  }
+}
+
+.alley .run-inner {
+  padding-left: clamp(24px, 6vw, 110px);
+}
+
+.p-cabin {
+  --r: -2deg;
+  margin-top: 34px;
+}
+
+.scorecard {
+  position: relative;
+  padding: 22px clamp(18px, 3vw, 30px) 20px;
+  border: 3px solid var(--ink);
+  border-radius: 4px;
+  background:
+    linear-gradient(90deg, #0000 38px, rgb(239 71 111 / 0.35) 38px 40px, #0000 40px) no-repeat,
+    repeating-linear-gradient(#0000 0 31px, rgb(47 111 214 / 0.18) 31px 33px) 0 18px,
+    var(--paper);
+  box-shadow: 0 6px 0 var(--ink);
+  rotate: -1.2deg;
+}
+
+.scorecard-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 4px 12px;
+  max-width: none;
+  margin: 0 0 14px 34px;
+  font-weight: 700;
+  font-size: 20px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.scorecard-head span {
+  font-weight: 500;
+  font-size: 14px;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  opacity: 0.6;
+}
+
+.scorecard table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 17px;
+}
+
+.scorecard th {
+  padding: 6px 0 6px 34px;
+  font-weight: 500;
+  text-align: left;
+}
+
+.scorecard td {
+  padding: 6px 4px;
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 18px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.scorecard tr + tr {
+  border-top: 2px dotted rgb(36 48 73 / 0.25);
+}
+
+/* Circled in red pen. */
+.circled td span {
+  position: relative;
+  color: #d9304f;
+}
+
+.circled td span::after {
+  content: '';
+  position: absolute;
+  inset: -7px -12px -6px -12px;
+  border: 3px solid #d9304f;
+  border-radius: 48% 52% 45% 55% / 58% 44% 56% 42%;
+  rotate: -7deg;
+}
+
+.scorecard-foot {
+  margin: 14px 0 0 34px;
+  font-size: 15px;
+  line-height: 1.4;
+  opacity: 0.8;
+}
+
+/* ---- Twilight Pines ---- */
+
+.twilight {
+  padding-bottom: clamp(100px, 14vw, 180px);
+  background: linear-gradient(var(--night-bottom), #2f2b6e 40%, var(--night-top));
+  color: #e6e7ff;
+}
+
+.twilight::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(1.6px 1.6px at 20px 30px, #fff8e0 98%, #fff0),
+    radial-gradient(1.1px 1.1px at 130px 90px, #fff 98%, #fff0),
+    radial-gradient(2px 2px at 210px 170px, #fff8e0 98%, #fff0),
+    radial-gradient(1.1px 1.1px at 60px 220px, #fff 98%, #fff0),
+    radial-gradient(1.4px 1.4px at 250px 250px, #fff 98%, #fff0);
+  background-size: 280px 280px;
+  opacity: 0.8;
+}
+
+.aurora {
+  position: absolute;
+  top: calc(var(--tilt) + 10px);
+  left: 0;
+  width: 100%;
+  height: 340px;
+  filter: blur(8px);
+  animation: aurora 14s ease-in-out infinite alternate;
+}
+
+@keyframes aurora {
+  to {
+    translate: -3% 12px;
+    scale: 1.06 0.92;
+  }
+}
+
+.twilight h2,
+.twilight h3 {
+  color: #fff;
+}
+
+.twilight q {
+  color: var(--yellow);
+}
+
+.p-twilight {
+  --r: 2.5deg;
+  justify-self: center;
+}
+
+.postmark {
+  position: absolute;
+  top: -22px;
+  right: -16px;
+  display: grid;
+  place-content: center;
+  width: 92px;
+  aspect-ratio: 1;
+  border: 3px solid rgb(217 48 79 / 0.85);
+  border-radius: 50%;
+  outline: 2px solid rgb(217 48 79 / 0.85);
+  outline-offset: 3px;
+  color: rgb(217 48 79 / 0.95);
+  font-weight: 700;
+  font-size: 12px;
+  line-height: 1;
+  letter-spacing: 0.12em;
+  text-align: center;
+  text-transform: uppercase;
+  rotate: 14deg;
+}
+
+.postmark b {
+  font-size: 32px;
+  letter-spacing: 0;
+}
+
+.twilight h3 {
+  margin-top: clamp(56px, 8vw, 96px);
+}
+
+/* Each rank hangs off the cable on its own chair. */
+.chairlift {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chairlift li {
+  position: relative;
+  padding: 58px 10px 8px;
+}
+
+.chairlift li::before {
+  content: '';
+  position: absolute;
+  top: 16px;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: #9a9cd8;
+}
+
+.chair {
+  position: relative;
+  height: 100%;
+  padding: 14px 16px 16px;
+  border: 3px solid var(--ink);
+  border-radius: 8px 8px 18px 18px;
+  background: #fff;
+  color: var(--ink);
+  box-shadow: 0 5px 0 var(--ink);
+  transform-origin: 50% -42px;
+  animation: sway 4s ease-in-out infinite alternate;
+}
+
+.chairlift li:nth-child(2n) .chair {
+  animation-delay: -2s;
+}
+
+.chairlift li:nth-child(3n) .chair {
+  animation-delay: -1s;
+}
+
+/* The hanger, up to the cable. */
+.chair::before {
+  content: '';
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  width: 18px;
+  height: 42px;
+  translate: -50% 0;
+  border: 3px solid #9a9cd8;
+  border-bottom: 0;
+  border-radius: 9px 9px 0 0;
+}
+
+@keyframes sway {
+  from {
+    rotate: -2deg;
+  }
+  to {
+    rotate: 2deg;
+  }
+}
+
+.chair-rank {
+  display: inline-block;
+  margin-bottom: 8px;
+  padding: 0.1em 0.6em;
+  border-radius: 999px;
+  background: var(--ink);
+  color: #fff;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.chair b {
+  display: block;
+  font-weight: 600;
+  font-size: 21px;
+  line-height: 1.15;
+}
+
+.chair span:last-child {
+  display: block;
+  margin-top: 4px;
+  font-size: 15px;
+  line-height: 1.3;
+  opacity: 0.8;
+}
+
+.chair.unlock {
+  background: var(--yellow);
+}
+
+.shop-intro {
+  margin: 0 0 30px;
+  color: #c9cbf5;
+}
+
+/* Price tags on strings. */
+.tags {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 40px 22px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tags li {
+  position: relative;
+  display: grid;
+  gap: 4px;
+  padding: 26px 16px 14px;
+  border: 3px solid var(--ink);
+  border-radius: 8px 8px 14px 14px;
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: 0 5px 0 var(--ink);
+  rotate: var(--r, -1.5deg);
+  transform-origin: 50% -20px;
+}
+
+.tags li:nth-child(3n + 2) {
+  --r: 1.5deg;
+}
+
+.tags li:nth-child(3n) {
+  --r: -0.5deg;
+}
+
+/* Punched hole, and the string through it. */
+.tags li::before {
+  content: '';
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  width: 12px;
+  height: 12px;
+  translate: -50% 0;
+  border: 3px solid var(--ink);
+  border-radius: 50%;
+  background: #2f2b6e;
+}
+
+.tags li::after {
+  content: '';
+  position: absolute;
+  bottom: calc(100% - 14px);
+  left: 50%;
+  width: 2px;
+  height: 34px;
+  background: #c9cbf5;
+}
+
+.tags b {
+  font-weight: 600;
+  font-size: 19px;
+  line-height: 1.15;
+}
+
+.tags .effect {
+  font-size: 15px;
+  line-height: 1.3;
+  opacity: 0.8;
+}
+
+.price {
+  display: flex;
+  align-items: center;
+  margin-top: 6px;
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 18px;
+}
+
+.price small {
+  margin-left: auto;
+  font-family: var(--font);
+  font-weight: 500;
+  font-size: 13px;
+  opacity: 0.65;
+}
+
+.coin {
+  display: inline-block;
+  width: 0.95em;
+  height: 0.95em;
+  margin-right: 0.35em;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #fff6cf 0 18%, #ffcf3f 22% 58%, #e2961c 62%);
+}
+
+/* ---- The lodge: a lift pass ---- */
+
+.lodge {
+  padding-bottom: 210px;
+  background:
+    radial-gradient(ellipse 70% 60% at 50% 100%, rgb(255 214 110 / 0.22), #0000 70%),
+    var(--night-top);
+}
+
+.ticket {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  max-width: 620px;
+  margin: 40px auto 0;
+  border: 3px solid var(--ink);
+  border-radius: 14px;
+  background: #fff;
+  color: var(--ink);
+  box-shadow: 0 8px 0 #0b0d26;
+  rotate: -2deg;
+}
+
+/* The hole the wire wicket goes through. */
+.ticket::before {
+  content: '';
+  position: absolute;
+  top: 16px;
+  left: 22px;
+  width: 16px;
+  height: 16px;
+  border: 3px solid var(--ink);
+  border-radius: 50%;
+  background: var(--night-top);
+}
+
+.wicket {
+  position: absolute;
+  top: -44px;
+  left: 18px;
+  width: 24px;
+  height: 70px;
+  border: 3px solid #c5cbe0;
+  border-radius: 12px 12px 6px 6px;
+  border-right-color: transparent;
+}
+
+.ticket-main {
+  padding: 26px clamp(20px, 4vw, 36px) 30px clamp(44px, 6vw, 60px);
+}
+
+.ticket h2 {
+  margin: 0 0 14px;
+  color: var(--orange);
+  font-weight: 700;
+  font-size: clamp(36px, 6vw, 56px);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  -webkit-text-stroke: 0.08em var(--ink);
+  paint-order: stroke fill;
+}
+
+.ticket dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 20px;
+  margin: 0 0 24px;
+}
+
+.ticket dt {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  opacity: 0.6;
+}
+
+.ticket dd {
+  margin: 0;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.ticket .btn {
+  min-width: 9em;
+  text-align: center;
+}
+
+.ticket-stub {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 22px 18px;
+  border-left: 3px dashed var(--ink);
+  border-radius: 0 11px 11px 0;
+  background: var(--yellow);
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.1em;
+}
+
+.ticket-stub span {
+  writing-mode: vertical-rl;
+}
+
+/* Notches where it tears. */
+.ticket-stub::before,
+.ticket-stub::after {
+  content: '';
+  position: absolute;
+  top: -12px;
+  left: -12px;
+  width: 21px;
+  height: 21px;
+  border: 3px solid var(--ink);
+  border-radius: 50%;
+  background: var(--night-top);
+  clip-path: inset(50% 0 0);
+}
+
+.ticket-stub::after {
+  top: auto;
+  bottom: -12px;
+  clip-path: inset(0 0 50%);
+}
+
+.barcode {
+  width: 44px;
+  flex: 1;
+  min-height: 90px;
+  background: repeating-linear-gradient(
+    var(--ink) 0 3px,
+    #0000 3px 5px,
+    var(--ink) 5px 6px,
+    #0000 6px 9px,
+    var(--ink) 9px 13px,
+    #0000 13px 15px
+  );
+}
+
+@media (max-width: 480px) {
+  .ticket-stub {
+    padding-inline: 12px;
+  }
+
+  .barcode {
+    width: 30px;
+  }
+}
+
+.base-scene {
+  position: absolute;
+  left: 0;
+  bottom: -1px;
+  width: 100%;
+  height: 221px;
+}
+
+.base {
+  display: flow-root;
+  padding: 0 16px calc(48px + env(safe-area-inset-bottom));
+  background: #8f9bd6;
+  color: var(--ink);
+  font-size: 15px;
+  text-align: center;
+}
+
+.base p {
+  margin: 0.5em auto;
+  max-width: 62ch;
+}
+
+.base a {
+  font-weight: 600;
+}
+
+/* ---- Layout by width ---- */
+
+@media (max-width: 959px) {
+  .sun {
+    right: -24px;
+    top: 70px;
+  }
+
+  .c1 {
+    left: 8%;
+  }
+
+  .c2 {
+    left: 55%;
+  }
+
+  .c3 {
+    display: none;
+  }
+
+  /* Copy stacks above the slope: the slope follows it down instead of sitting
+     at a fixed height, so they never overlap. */
+  .summit {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .hero-copy {
+    padding-bottom: 40px;
+  }
+
+  .snowfield {
+    position: relative;
+    flex: none;
+    height: 360px;
+    margin-top: auto;
+  }
+
+  .board {
+    min-width: 10.5em;
+    font-size: 13px;
+  }
+}
+
+/* Wide: copy on the left, the run on the right (signpost, kicker, the yeti in the air). */
+@media (min-width: 960px) {
+  .hero-copy {
+    padding-left: clamp(24px, 6vw, 110px);
+  }
+
+  .lede {
+    max-width: min(30ch, 27vw);
+  }
+
+  .signpost {
+    --x: 50;
+  }
+
+  .hero-yeti {
+    --x: 77;
+    --y: 6;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  .flakes {
+    display: none;
+  }
+
+  .trick.show {
+    opacity: 1;
+  }
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
