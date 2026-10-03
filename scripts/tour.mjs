@@ -26,7 +26,7 @@ page.on('pageerror', (e) => errors.push(e.message));
 // each (software-rendered) frame takes for real.
 await page.clock.install({ time: 0 });
 await page.clock.pauseAt(1000);
-await page.goto(`http://localhost:${port}/?seed=${process.env.SEED ?? 7}${extra}`);
+await page.goto(`http://localhost:${port}/play/?seed=${process.env.SEED ?? 7}${extra}`);
 // Let fonts/boot finish on the fake clock.
 for (let i = 0; i < 40 && !(await page.evaluate(() => !!window.__game?.scene?.getScene('play')?.run)); i++) {
   await page.clock.runFor(100);
@@ -90,7 +90,7 @@ const p2 = await browser.newPage({ viewport: { width: w, height: h }, deviceScal
 p2.on('pageerror', (e) => errors.push(e.message));
 await p2.clock.install({ time: 0 });
 await p2.clock.pauseAt(1000);
-await p2.goto(`http://localhost:${port}/?seed=${seed2}${extra}`);
+await p2.goto(`http://localhost:${port}/play/?seed=${seed2}${extra}`);
 for (let i = 0; i < 40 && !(await p2.evaluate(() => !!window.__game?.scene?.getScene('play')?.run)); i++) await p2.clock.runFor(100);
 await p2.keyboard.press('Enter');
 await p2.clock.runFor(100);
@@ -160,7 +160,7 @@ async function mountPage(query, [vw, vh, vdpr] = [w, h, dpr]) {
   await p.addInitScript(() => localStorage.setItem('yeti-set-go.tuning', JSON.stringify({ obstacleDensity: 0, mountDensity: 0 })));
   await p.clock.install({ time: 0 });
   await p.clock.pauseAt(1000);
-  await p.goto(`http://localhost:${port}/?seed=${process.env.MOUNT_SEED ?? 11}${query}${process.env.DEBUG ? '&debug' : ''}`);
+  await p.goto(`http://localhost:${port}/play/?seed=${process.env.MOUNT_SEED ?? 11}${query}${process.env.DEBUG ? '&debug' : ''}`);
   for (let i = 0; i < 40 && !(await p.evaluate(() => !!window.__game?.scene?.getScene('play')?.run)); i++) await p.clock.runFor(100);
   await p.keyboard.press('Enter');
   await p.clock.runFor(100);

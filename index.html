@@ -2,15 +2,280 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#5fa8e8" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="description" content="Yeti, Set, Go! — an endless downhill skiing game." />
+    <meta name="description" content="Yeti, Set, Go! is a free browser skiing game. You're a yeti on skis, and the avalanche is right behind you." />
+    <meta property="og:title" content="Yeti, Set, Go!" />
+    <meta property="og:description" content="A yeti on skis, an avalanche, and one button. Free in your browser." />
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%235fa8e8'/%3E%3Cpath d='M6 52 L26 22 L34 32 L42 20 L58 52Z' fill='%23f7fbff'/%3E%3Ccircle cx='47' cy='15' r='6' fill='%23ffc93c'/%3E%3C/svg%3E" />
     <title>Yeti, Set, Go!</title>
   </head>
   <body>
-    <div id="game"></div>
-    <script type="module" src="/src/main.ts"></script>
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <!-- The yeti, ported from src/render/skierView.ts (drawYeti, drawSkis, a frozen scarf). -->
+      <symbol id="yeti" viewBox="-50 -84 104 88"><polygon fill="#ef476f" points="-5.3,-44.3 -10.2,-45.7 -15.3,-46.5 -20.6,-46.4 -26,-45.8 -31.3,-45.8 -36.2,-47.2 -40.8,-50.2 -41.5,-47.2 -37,-43.7 -32.2,-41.7 -27,-41.3 -21.7,-41.3 -16.6,-40.9 -11.6,-39.6 -6.7,-37.7"/><polygon fill="#ef476f" points="-5.3,-44.3 -8.9,-45 -12.4,-46.3 -16,-47.6 -19.7,-47.9 -23.7,-47 -27.9,-45.3 -31.9,-44.2 -32.6,-41.2 -28.6,-41.8 -24.6,-42.9 -20.7,-43.4 -17.1,-42.5 -13.7,-40.7 -10.3,-38.9 -6.7,-37.7"/><g class="skis"><polygon fill="#34466b" points="-42,-5 36,-5 44,-10 49,-9 43,-1 -42,-1"/></g><g fill="#4c4f8c" stroke="#4c4f8c" stroke-width="4.4" stroke-linejoin="round"><polygon points="-14.6,-24.3 -16.3,-23.3 -18.2,-23 -20.1,-23.5 -21.7,-24.6 -22.7,-26.3 -23,-28.2 -22.5,-30.1 -21.4,-31.7 -8.4,-43.7 -6.7,-44.7 -4.8,-45 -2.9,-44.5 -1.3,-43.4 -0.3,-41.7 0,-39.8 -0.5,-37.9 -1.6,-36.3"/><polygon points="-15.2,-33.4 -15.5,-26.1 -8.8,-28.6"/><polygon points="-15.5,-26 -15.7,-24.6 -16.4,-23.4 -17.4,-22.4 -18.6,-21.7 -20,-21.5 -21.4,-21.7 -22.6,-22.4 -23.6,-23.4 -24.3,-24.6 -24.5,-26 -24.3,-27.4 -23.6,-28.6 -22.6,-29.6 -21.4,-30.3 -20,-30.5 -18.6,-30.3 -17.4,-29.6 -16.4,-28.6 -15.7,-27.4"/></g><polygon fill="#a9a9df" points="-14.6,-24.3 -16.3,-23.3 -18.2,-23 -20.1,-23.5 -21.7,-24.6 -22.7,-26.3 -23,-28.2 -22.5,-30.1 -21.4,-31.7 -8.4,-43.7 -6.7,-44.7 -4.8,-45 -2.9,-44.5 -1.3,-43.4 -0.3,-41.7 0,-39.8 -0.5,-37.9 -1.6,-36.3"/><polygon fill="#a9a9df" points="-15.2,-33.4 -15.5,-26.1 -8.8,-28.6"/><polygon fill="#5d6198" points="-15.5,-26 -15.7,-24.6 -16.4,-23.4 -17.4,-22.4 -18.6,-21.7 -20,-21.5 -21.4,-21.7 -22.6,-22.4 -23.6,-23.4 -24.3,-24.6 -24.5,-26 -24.3,-27.4 -23.6,-28.6 -22.6,-29.6 -21.4,-30.3 -20,-30.5 -18.6,-30.3 -17.4,-29.6 -16.4,-28.6 -15.7,-27.4"/><g fill="#4c4f8c" stroke="#4c4f8c" stroke-width="4.4" stroke-linejoin="round"><polygon points="-12,-4 16,-4 19,-8 15,-13 -11,-14 -13,-9"/><polygon points="8.6,-19.8 9.5,-16.6 9.1,-13.3 7.4,-10.4 4.8,-8.4 1.6,-7.5 -1.7,-7.9 -4.6,-9.6 -6.6,-12.2 -10.6,-20.2 -11.5,-23.4 -11.1,-26.7 -9.4,-29.6 -6.8,-31.6 -3.6,-32.5 -0.3,-32.1 2.6,-30.4 4.6,-27.8"/><polygon points="-12,-20 12,-20 13,-14 10,-10 7,-14 4,-10 1,-14 -2,-10 -5,-14 -8,-10 -11,-14"/><polygon points="-13.9,-22.1 -13.8,-13.5 -5.7,-16.3"/><polygon points="-16.3,-28.1 -19.8,-20.3 -11.3,-19.5"/><polygon points="-16,-34.7 -22.5,-29.1 -15.1,-24.8"/><polygon points="-13.1,-40.6 -21.4,-38.3 -16.5,-31.2"/><polygon points="-8.1,-44.7 -16.6,-46.1 -15.2,-37.6"/><polygon points="14.8,-33.5 14.9,-28.8 13.9,-24.3 11.8,-20.2 8.7,-16.9 4.9,-14.5 0.7,-13.2 -3.8,-13.2 -8.1,-14.3 -12,-16.6 -15.2,-19.9 -17.5,-23.9 -18.8,-28.5 -18.9,-33.2 -17.9,-37.7 -15.8,-41.8 -12.7,-45.1 -8.9,-47.5 -4.7,-48.8 -0.2,-48.8 4.1,-47.7 8,-45.4 11.2,-42.1 13.5,-38.1"/><polygon points="-6,-53.7 -9.8,-46.3 -1.5,-45.9"/><polygon points="-5.7,-60.1 -12.6,-55.3 -5.4,-51.1"/><polygon points="-2.3,-65.5 -10.5,-64.5 -6.2,-57.4"/><polygon points="25,-56 24.2,-51.2 21.8,-46.9 18,-43.5 13.3,-41.3 8,-40.5 2.7,-41.3 -2,-43.5 -5.8,-46.9 -8.2,-51.2 -9,-56 -8.2,-60.8 -5.8,-65.1 -2,-68.5 2.7,-70.7 8,-71.5 13.3,-70.7 18,-68.5 21.8,-65.1 24.2,-60.8"/></g><polygon fill="#ff7a45" points="-12,-4 16,-4 19,-8 15,-13 -11,-14 -13,-9"/><polygon fill="#d2d3f5" points="8.6,-19.8 9.5,-16.6 9.1,-13.3 7.4,-10.4 4.8,-8.4 1.6,-7.5 -1.7,-7.9 -4.6,-9.6 -6.6,-12.2 -10.6,-20.2 -11.5,-23.4 -11.1,-26.7 -9.4,-29.6 -6.8,-31.6 -3.6,-32.5 -0.3,-32.1 2.6,-30.4 4.6,-27.8"/><polygon fill="#d2d3f5" points="-12,-20 12,-20 13,-14 10,-10 7,-14 4,-10 1,-14 -2,-10 -5,-14 -8,-10 -11,-14"/><polygon fill="#d2d3f5" points="-13.9,-22.1 -13.8,-13.5 -5.7,-16.3"/><polygon fill="#d2d3f5" points="-16.3,-28.1 -19.8,-20.3 -11.3,-19.5"/><polygon fill="#d2d3f5" points="-16,-34.7 -22.5,-29.1 -15.1,-24.8"/><polygon fill="#d2d3f5" points="-13.1,-40.6 -21.4,-38.3 -16.5,-31.2"/><polygon fill="#d2d3f5" points="-8.1,-44.7 -16.6,-46.1 -15.2,-37.6"/><polygon fill="#d2d3f5" points="14.8,-33.5 14.9,-28.8 13.9,-24.3 11.8,-20.2 8.7,-16.9 4.9,-14.5 0.7,-13.2 -3.8,-13.2 -8.1,-14.3 -12,-16.6 -15.2,-19.9 -17.5,-23.9 -18.8,-28.5 -18.9,-33.2 -17.9,-37.7 -15.8,-41.8 -12.7,-45.1 -8.9,-47.5 -4.7,-48.8 -0.2,-48.8 4.1,-47.7 8,-45.4 11.2,-42.1 13.5,-38.1"/><polygon fill="#d2d3f5" points="-6,-53.7 -9.8,-46.3 -1.5,-45.9"/><polygon fill="#d2d3f5" points="-5.7,-60.1 -12.6,-55.3 -5.4,-51.1"/><polygon fill="#d2d3f5" points="-2.3,-65.5 -10.5,-64.5 -6.2,-57.4"/><polygon fill="#d2d3f5" points="25,-56 24.2,-51.2 21.8,-46.9 18,-43.5 13.3,-41.3 8,-40.5 2.7,-41.3 -2,-43.5 -5.8,-46.9 -8.2,-51.2 -9,-56 -8.2,-60.8 -5.8,-65.1 -2,-68.5 2.7,-70.7 8,-71.5 13.3,-70.7 18,-68.5 21.8,-65.1 24.2,-60.8"/><polygon fill="#f0f0ff" points="13.9,-29.3 13.9,-26.1 13.1,-23 11.5,-20.4 9.2,-18.5 6.6,-17.6 3.7,-17.7 1,-18.8 -1.3,-20.8 -3,-23.5 -3.9,-26.7 -3.9,-29.9 -3.1,-33 -1.5,-35.6 0.8,-37.5 3.4,-38.4 6.3,-38.3 9,-37.2 11.3,-35.2 13,-32.5"/><polygon fill="#5d6198" points="24,-53 23.5,-50.4 22,-48 19.7,-46.1 16.7,-44.9 13.5,-44.5 10.3,-44.9 7.3,-46.1 5,-48 3.5,-50.4 3,-53 3.5,-55.6 5,-58 7.3,-59.9 10.3,-61.1 13.5,-61.5 16.7,-61.1 19.7,-59.9 22,-58 23.5,-55.6"/><polygon fill="#ffffff" points="13.1,-54.5 12.7,-52.6 11.7,-51.1 10.3,-50.3 8.7,-50.3 7.3,-51.1 6.3,-52.6 5.9,-54.5 6.3,-56.4 7.3,-57.9 8.7,-58.7 10.3,-58.7 11.7,-57.9 12.7,-56.4"/><polygon fill="#243049" points="12.7,-54 12.4,-52.8 11.6,-51.9 10.5,-51.6 9.4,-51.9 8.6,-52.8 8.3,-54 8.6,-55.2 9.4,-56.1 10.5,-56.4 11.6,-56.1 12.4,-55.2"/><polygon fill="#ffffff" points="12.1,-55.2 11.8,-54.6 11.2,-54.3 10.6,-54.6 10.3,-55.2 10.6,-55.8 11.2,-56.1 11.8,-55.8"/><polygon fill="#ffffff" points="21.1,-54.5 20.7,-52.6 19.7,-51.1 18.3,-50.3 16.7,-50.3 15.3,-51.1 14.3,-52.6 13.9,-54.5 14.3,-56.4 15.3,-57.9 16.7,-58.7 18.3,-58.7 19.7,-57.9 20.7,-56.4"/><polygon fill="#243049" points="20.7,-54 20.4,-52.8 19.6,-51.9 18.5,-51.6 17.4,-51.9 16.6,-52.8 16.3,-54 16.6,-55.2 17.4,-56.1 18.5,-56.4 19.6,-56.1 20.4,-55.2"/><polygon fill="#ffffff" points="20.1,-55.2 19.8,-54.6 19.2,-54.3 18.6,-54.6 18.3,-55.2 18.6,-55.8 19.2,-56.1 19.8,-55.8"/><polygon fill="#243049" points="10.5,-50.3 18.5,-50.3 17,-48 12,-48"/><polygon fill="#ffffff" points="12,-50.3 14,-50.3 13,-48.7"/><g fill="#4c4f8c" stroke="#4c4f8c" stroke-width="4.4" stroke-linejoin="round"><polygon points="14,-44.4 15.3,-44.1 16.4,-43.4 17.1,-42.3 17.4,-41 17.1,-39.7 16.4,-38.6 15.3,-37.9 14,-37.6 -7,-37.6 -8.3,-37.9 -9.4,-38.6 -10.1,-39.7 -10.4,-41 -10.1,-42.3 -9.4,-43.4 -8.3,-44.1 -7,-44.4"/></g><polygon fill="#ef476f" points="14,-44.4 15.3,-44.1 16.4,-43.4 17.1,-42.3 17.4,-41 17.1,-39.7 16.4,-38.6 15.3,-37.9 14,-37.6 -7,-37.6 -8.3,-37.9 -9.4,-38.6 -10.1,-39.7 -10.4,-41 -10.1,-42.3 -9.4,-43.4 -8.3,-44.1 -7,-44.4"/><g fill="#4c4f8c" stroke="#4c4f8c" stroke-width="4.4" stroke-linejoin="round"><polygon points="25,-63 -9,-63 -8.4,-65.6 -6.7,-68 -4,-70.1 -0.5,-71.7 3.6,-72.7 8,-73 12.4,-72.7 16.5,-71.7 20,-70.1 22.7,-68 24.4,-65.6"/><polygon points="25,-66.6 26.4,-66.3 27.5,-65.5 28.3,-64.4 28.6,-63 28.3,-61.6 27.5,-60.5 26.4,-59.7 25,-59.4 -9,-59.4 -10.4,-59.7 -11.5,-60.5 -12.3,-61.6 -12.6,-63 -12.3,-64.4 -11.5,-65.5 -10.4,-66.3 -9,-66.6"/><polygon points="5.5,-74 5.3,-72.6 4.6,-71.4 3.6,-70.4 2.4,-69.7 1,-69.5 -0.4,-69.7 -1.6,-70.4 -2.6,-71.4 -3.3,-72.6 -3.5,-74 -3.3,-75.4 -2.6,-76.6 -1.6,-77.6 -0.4,-78.3 1,-78.5 2.4,-78.3 3.6,-77.6 4.6,-76.6 5.3,-75.4"/></g><polygon fill="#ffc93c" points="25,-63 -9,-63 -8.4,-65.6 -6.7,-68 -4,-70.1 -0.5,-71.7 3.6,-72.7 8,-73 12.4,-72.7 16.5,-71.7 20,-70.1 22.7,-68 24.4,-65.6"/><polygon fill="#f5ad2a" points="25,-66.6 26.4,-66.3 27.5,-65.5 28.3,-64.4 28.6,-63 28.3,-61.6 27.5,-60.5 26.4,-59.7 25,-59.4 -9,-59.4 -10.4,-59.7 -11.5,-60.5 -12.3,-61.6 -12.6,-63 -12.3,-64.4 -11.5,-65.5 -10.4,-66.3 -9,-66.6"/><polygon fill="#ef476f" points="5.5,-74 5.3,-72.6 4.6,-71.4 3.6,-70.4 2.4,-69.7 1,-69.5 -0.4,-69.7 -1.6,-70.4 -2.6,-71.4 -3.3,-72.6 -3.5,-74 -3.3,-75.4 -2.6,-76.6 -1.6,-77.6 -0.4,-78.3 1,-78.5 2.4,-78.3 3.6,-77.6 4.6,-76.6 5.3,-75.4"/><g fill="#4c4f8c" stroke="#4c4f8c" stroke-width="4.4" stroke-linejoin="round"><polygon points="20.2,-28.8 21.4,-27.3 22,-25.4 21.8,-23.5 20.8,-21.8 19.3,-20.6 17.4,-20 15.5,-20.2 13.8,-21.2 0.8,-32.2 -0.4,-33.7 -1,-35.6 -0.8,-37.5 0.2,-39.2 1.7,-40.4 3.6,-41 5.5,-40.8 7.2,-39.8"/><polygon points="9.2,-25.3 11.1,-18.3 16.8,-22.7"/><polygon points="15,-21.5 18.8,-17.1 21,-22.5"/><polygon points="25.5,-22 25.3,-20.6 24.6,-19.4 23.6,-18.4 22.4,-17.7 21,-17.5 19.6,-17.7 18.4,-18.4 17.4,-19.4 16.7,-20.6 16.5,-22 16.7,-23.4 17.4,-24.6 18.4,-25.6 19.6,-26.3 21,-26.5 22.4,-26.3 23.6,-25.6 24.6,-24.6 25.3,-23.4"/></g><polygon fill="#d2d3f5" points="20.2,-28.8 21.4,-27.3 22,-25.4 21.8,-23.5 20.8,-21.8 19.3,-20.6 17.4,-20 15.5,-20.2 13.8,-21.2 0.8,-32.2 -0.4,-33.7 -1,-35.6 -0.8,-37.5 0.2,-39.2 1.7,-40.4 3.6,-41 5.5,-40.8 7.2,-39.8"/><polygon fill="#d2d3f5" points="9.2,-25.3 11.1,-18.3 16.8,-22.7"/><polygon fill="#d2d3f5" points="15,-21.5 18.8,-17.1 21,-22.5"/><polygon fill="#5d6198" points="25.5,-22 25.3,-20.6 24.6,-19.4 23.6,-18.4 22.4,-17.7 21,-17.5 19.6,-17.7 18.4,-18.4 17.4,-19.4 16.7,-20.6 16.5,-22 16.7,-23.4 17.4,-24.6 18.4,-25.6 19.6,-26.3 21,-26.5 22.4,-26.3 23.6,-25.6 24.6,-24.6 25.3,-23.4"/></symbol>
+      <symbol id="cloud" viewBox="0 0 200 90">
+        <path d="M18 86a24 24 0 0 1 6-46 34 34 0 0 1 58-22 40 40 0 0 1 70 10 30 30 0 0 1 34 58z" />
+      </symbol>
+      <symbol id="pine" viewBox="0 0 40 72">
+        <rect x="17" y="58" width="6" height="14" fill="#6b4a3a" />
+        <path d="M20 0 33 24h-6l11 18h-7l9 18H2l9-18H4l11-18H7z" fill="#2f6f67" />
+        <path d="M20 0 26 11l-6 4-6-4zM10 42h20l-4 4H14zM6 24h28l-3 4H9z" fill="#f7fbff" opacity=".85" />
+      </symbol>
+    </svg>
+
+    <div class="hud" aria-hidden="true">
+      <b class="hud-score" id="hud-score">0</b>
+      <span class="hud-sub"><span id="hud-m">0</span> m&ensp;<span id="hud-kmh">0</span> km/h</span>
+      <span class="hud-warn" id="hud-warn"></span>
+    </div>
+    <a class="play-pill" href="play/">Play <i aria-hidden="true"></i></a>
+    <div class="chaser" aria-hidden="true"></div>
+
+    <header class="summit">
+      <div class="sun" aria-hidden="true"></div>
+      <div class="clouds" aria-hidden="true">
+        <svg class="cloud c1"><use href="#cloud" /></svg>
+        <svg class="cloud c2"><use href="#cloud" /></svg>
+        <svg class="cloud c3"><use href="#cloud" /></svg>
+      </div>
+      <svg class="range" viewBox="0 0 1440 400" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
+        <path d="M0 260 170 120l90 70 150-150 120 110 80-60 160 160 150-180 170 150 120-70 230 190v160H0z" fill="#b8d1ef" />
+        <path d="m260 190 150-150 120 110-48-12-40 22-32-30-50 30zm620-50 150-180 170 150-60-14-50 26-40-38-56 34z" fill="#eef5fd" transform="translate(0 70)" />
+        <path d="M0 330 240 210l140 90 180-140 210 170 170-120 200 110 160-90 140 110v160H0z" fill="#93b6e0" />
+        <path d="m560 160 102 76-34-8-30 18-38-26-40 20zm-180 140-140-90 60 50 30-10z" fill="#e4eefb" opacity=".9" />
+        <path d="M0 372q60-20 120-6t130-4 140 10 160-12 140 8 160-16 150 12 140-6 140 10 160-8v32H0z" fill="#6f96c4" />
+      </svg>
+      <div class="flakes" aria-hidden="true"></div>
+
+      <div class="hero-copy">
+        <h1 class="wordmark">
+          <span>Yeti,</span>
+          <span>Set,</span>
+          <span>Go!</span>
+        </h1>
+        <p class="lede">You're a yeti on skis. Behind you, the whole mountain is coming down. Jump, backflip, hitch a ride on a penguin, and whatever you do, don't stop.</p>
+        <div class="cta-row">
+          <a class="btn primary big" href="play/">Play in your browser</a>
+          <p class="cta-note">Free. No install, no account.<br />Desktop, or a phone turned sideways.</p>
+        </div>
+      </div>
+
+      <div class="snowfield">
+        <svg class="snow" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+          <path d="M0 30 52 50.8Q59 50.6 63 45.6L63.8 55.5 100 70V100H0z" fill="#f7fbff" />
+          <path d="M0 44q30 8 55 16t45 22V100H0z" fill="#e3edf9" />
+          <path d="M0 62q40 6 65 15t35 15V100H0z" fill="#c9daf1" />
+          <path d="M0 82q50 4 100 16V100H0z" fill="#adc4e6" />
+        </svg>
+        <svg class="pine" style="--x: 38; --s: 0.8" aria-hidden="true"><use href="#pine" /></svg>
+        <svg class="pine" style="--x: 89; --s: 1.2" aria-hidden="true"><use href="#pine" /></svg>
+        <svg class="pine" style="--x: 96; --s: 0.9" aria-hidden="true"><use href="#pine" /></svg>
+        <button class="hero-yeti" type="button" aria-label="Backflip the yeti (hold to keep flipping)">
+          <span class="spray" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+          <svg aria-hidden="true"><use href="#yeti" /></svg>
+          <span class="trick" id="trick" aria-hidden="true"></span>
+        </button>
+        <nav class="signpost" aria-label="Trails">
+          <a class="board green" href="#bunny-hill"><i class="sym"></i>Bunny Hill</a>
+          <a class="board blue left" href="#penguin-pass"><i class="sym"></i>Penguin Pass</a>
+          <a class="board black" href="#avalanche-alley"><i class="sym"></i>Avalanche Alley</a>
+          <a class="board double left" href="#twilight-pines"><i class="sym"></i>Twilight Pines</a>
+        </nav>
+      </div>
+    </header>
+
+    <main>
+      <section class="run bunny" id="bunny-hill" aria-labelledby="bunny-title">
+        <div class="run-inner split">
+          <div>
+            <p class="trail-sign green"><i class="sym"></i><span>Bunny Hill</span><small>Easiest</small></p>
+            <h2 id="bunny-title">One button. That's the whole tutorial.</h2>
+            <ol class="steps">
+              <li>
+                <span class="keys"><kbd>Space</kbd><span>or</span><kbd>tap</kbd></span>
+                <span><b>Jump.</b> Off anything. The bigger the bump, the bigger the air.</span>
+              </li>
+              <li>
+                <span class="keys"><kbd class="held">hold</kbd></span>
+                <span><b>Backflip.</b> Keep holding in the air and the yeti goes over. Hold longer, flip more.</span>
+              </li>
+              <li>
+                <span class="keys"><kbd>let go</kbd></span>
+                <span><b>Land it.</b> Skis flat to the snow. This is the part that takes a while.</span>
+              </li>
+            </ol>
+          </div>
+
+          <figure class="judge card">
+            <figcaption>
+              <span class="judge-title">The landing judge</span>
+              <span class="judge-verdict" id="verdict" aria-live="polite">Clean</span>
+            </figcaption>
+            <svg viewBox="-170 -150 340 200" aria-hidden="true">
+              <g transform="rotate(14)">
+                <circle class="zone crash" id="zone-crash" />
+                <path class="zone sloppy" id="zone-sloppy" />
+                <path class="zone clean" id="zone-clean" />
+                <g id="judge-yeti"><use href="#yeti" x="-50" y="-84" width="104" height="88" transform="scale(1.15)" /></g>
+                <path d="M-400 0H400V200H-400z" fill="#f7fbff" />
+                <path d="M-400 0H400" stroke="#ffffff" stroke-width="5" />
+                <path d="M-400 12H400" stroke="#e3edf9" stroke-width="10" />
+              </g>
+            </svg>
+            <label class="judge-control">
+              <span>Tilt the yeti: <output id="tilt-out">12°</output> off the snow</span>
+              <input type="range" id="tilt" min="-120" max="120" value="12" />
+            </label>
+            <p class="judge-note" id="verdict-note">Every flip you landed turns into a burst of speed.</p>
+          </figure>
+        </div>
+      </section>
+
+      <section class="run penguin" id="penguin-pass" aria-labelledby="penguin-title">
+        <div class="run-inner">
+          <p class="trail-sign blue"><i class="sym"></i><span>Penguin Pass</span><small>More difficult</small></p>
+          <h2 id="penguin-title">Ski into an animal. Now you're riding it.</h2>
+          <div class="rentals-wrap">
+            <div class="rentals">
+              <p class="rentals-head">Rentals <span>No deposit. No helmet.</span></p>
+              <dl>
+                <div><dt>Penguin</dt><dd>Glides. Flips faster than you do.</dd></div>
+                <div><dt>Eagle</dt><dd>Picks you up and flies. Hold to climb.</dd></div>
+                <div><dt>Snowmobile</dt><dd>Runs on a tank of fuel. Has room for a passenger.</dd></div>
+                <div><dt>Polar bear</dt><dd>Goes through rocks. Goes through cabins.</dd></div>
+              </dl>
+              <p class="rentals-foot">Anything you ride takes the hit for you. Smack a rock and you lose the ride, not the run.</p>
+            </div>
+            <figure class="postcard p-eagle">
+              <img src="docs/screenshots/eagle.png" width="1280" height="720" loading="lazy" alt="The yeti being carried through the air by an eagle" />
+              <figcaption>Eagle, mid-carry.</figcaption>
+            </figure>
+            <figure class="postcard p-bear">
+              <img src="docs/screenshots/polar-bear.png" width="1280" height="720" loading="lazy" alt="A polar bear carrying the yeti and smashing a rock" />
+              <figcaption>Bear vs. rock. Bear wins.</figcaption>
+            </figure>
+            <figure class="postcard p-sled">
+              <img src="docs/screenshots/snowmobile.png" width="1280" height="720" loading="lazy" alt="The yeti riding a snowmobile with a penguin, just after grabbing a full coin cluster" />
+              <figcaption>Snowmobile, penguin riding shotgun.</figcaption>
+            </figure>
+          </div>
+        </div>
+      </section>
+
+      <section class="run alley" id="avalanche-alley" aria-labelledby="alley-title">
+        <div class="avalanche-wall" aria-hidden="true"></div>
+        <div class="run-inner split">
+          <div>
+            <p class="trail-sign black"><i class="sym"></i><span>Avalanche Alley</span><small>Most difficult</small></p>
+            <h2 id="alley-title">You can't outrun it. You can outrun it for longer.</h2>
+            <p>The avalanche starts a few metres behind you and speeds up the longer you ski. Wipe out and it closes the gap. Jump the rocks, use the ice, ride the cabin roofs.</p>
+            <figure class="postcard p-cabin">
+              <img src="docs/screenshots/cabin-roof.png" width="1280" height="720" loading="lazy" alt="The yeti skiing over a cabin roof" />
+              <figcaption>Roof: fine. Wall: not fine.</figcaption>
+            </figure>
+          </div>
+          <div class="scorecard">
+            <p class="scorecard-head">Official scorecard <span>Judge: the mountain</span></p>
+            <table>
+              <tbody>
+                <tr><th scope="row">Every metre skied</th><td>1</td></tr>
+                <tr><th scope="row">Clean backflip</th><td>100</td></tr>
+                <tr><th scope="row">Clean double</th><td>300</td></tr>
+                <tr><th scope="row">Clean triple</th><td>600</td></tr>
+                <tr class="circled"><th scope="row">Trick multiplier, at most</th><td><span>×10</span></td></tr>
+                <tr><th scope="row">Sloppy landing</th><td>back to ×1</td></tr>
+              </tbody>
+            </table>
+            <p class="scorecard-foot">Each clean landing adds its flips to the multiplier, so a double takes you from ×1 to ×3. Grab every coin in a cluster for a speed boost.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="run twilight" id="twilight-pines" aria-labelledby="twilight-title">
+        <svg class="aurora" viewBox="0 0 1200 300" preserveAspectRatio="none" aria-hidden="true">
+          <path d="M-20 140C180 40 380 210 600 120S1000 20 1220 110" fill="none" stroke="#6ff5c8" stroke-width="50" opacity=".22" />
+          <path d="M-20 100C220 10 420 170 640 90S1010 40 1220 70" fill="none" stroke="#9d8cff" stroke-width="34" opacity=".25" />
+          <path d="M-20 170C200 90 420 240 620 160S1000 70 1220 150" fill="none" stroke="#6ff5c8" stroke-width="18" opacity=".18" />
+        </svg>
+        <div class="run-inner">
+          <p class="trail-sign double"><i class="sym"></i><span>Twilight Pines</span><small>Experts only</small></p>
+          <div class="split">
+            <div>
+              <h2 id="twilight-title">There's a second mountain. Rank&nbsp;3 gets you in.</h2>
+              <p>You always have three goals, like <q>land a clean double</q> or <q>get picked up by an eagle</q>. Finish all three and you rank up. Every rank multiplies your whole score by another ×0.25, and some of them come with something extra.</p>
+            </div>
+            <figure class="postcard p-twilight">
+              <img src="docs/screenshots/twilight.png" width="1280" height="720" loading="lazy" alt="Twilight Pines at night: moon, aurora, dark pines, the avalanche close behind" />
+              <figcaption>Greetings from Twilight Pines.</figcaption>
+              <span class="postmark" aria-hidden="true">Rank<b>3</b>only</span>
+            </figure>
+          </div>
+
+          <h3>The chairlift</h3>
+          <ol class="chairlift" id="perks"></ol>
+
+          <h3>The shop</h3>
+          <p class="shop-intro">Coins stay with you between runs. Spend them here.</p>
+          <ul class="tags" id="shop"></ul>
+        </div>
+      </section>
+
+      <section class="run lodge" aria-labelledby="ticket-title">
+        <div class="run-inner">
+          <div class="ticket">
+            <span class="wicket" aria-hidden="true"></span>
+            <div class="ticket-main">
+              <h2 id="ticket-title">Lift pass</h2>
+              <dl>
+                <div><dt>Admit</dt><dd>One yeti</dd></div>
+                <div><dt>Mountain</dt><dd>Endless</dd></div>
+                <div><dt>Valid on</dt><dd>Desktop, or a phone turned sideways</dd></div>
+                <div><dt>Price</dt><dd>0 coins</dd></div>
+              </dl>
+              <a class="btn primary big" href="play/">Ride</a>
+            </div>
+            <div class="ticket-stub" aria-hidden="true">
+              <span>No. 000363</span>
+              <i class="barcode"></i>
+            </div>
+          </div>
+        </div>
+        <svg class="base-scene" viewBox="0 0 1440 220" preserveAspectRatio="xMaxYMax slice" aria-hidden="true">
+          <defs>
+            <radialGradient id="glow"><stop offset="0" stop-color="#ffcf5c" stop-opacity=".55" /><stop offset="1" stop-color="#ffcf5c" stop-opacity="0" /></radialGradient>
+          </defs>
+          <circle cx="1196" cy="134" r="90" fill="url(#glow)" />
+          <path d="M0 160q240-46 520-20t520-10 400-34v124H0z" fill="#aab5e6" />
+          <path d="M0 186q300-30 700-8t740-22v64H0z" fill="#8f9bd6" />
+          <g transform="translate(1110 52)">
+            <rect x="12" y="52" width="170" height="76" fill="#8a5a40" />
+            <path d="M12 70h170M12 88h170M12 106h170" stroke="#5e3b2a" stroke-width="3" />
+            <rect x="122" y="10" width="20" height="46" fill="#5f6585" />
+            <path d="M-6 60 97 0l103 60z" fill="#5a3029" />
+            <path d="M-8 60 97-2l105 62-10 4-20-10-18 8-22-14-22 12-18-10-22 12-16-8-22 10-20-10z" fill="#dde2ff" />
+            <rect x="34" y="78" width="34" height="26" rx="3" fill="#ffcf5c" />
+            <path d="M51 78v26M34 91h34" stroke="#5e3b2a" stroke-width="3" />
+            <rect x="120" y="82" width="30" height="46" fill="#4a2a20" />
+          </g>
+          <g fill="#e6eaff" opacity=".5">
+            <circle cx="1246" cy="40" r="9" /><circle cx="1258" cy="22" r="12" /><circle cx="1276" cy="2" r="15" />
+          </g>
+          <g fill="#1e4652">
+            <path d="M1380 160l-28-56h10l-22-40h9l-19-34-19 34h9l-22 40h10l-28 56z" />
+            <path d="M190 160l-24-48h9l-19-34h8l-16-30-16 30h8l-19 34h9l-24 48z" />
+            <path d="M262 156l-18-36h7l-14-26h6l-12-22-12 22h6l-14 26h7l-18 36z" />
+          </g>
+        </svg>
+      </section>
+    </main>
+
+    <footer class="base">
+      <p>Yeti, Set, Go! is a portfolio project by Ahnaf Alfariza. It borrows its idea from <i>Ski Safari</i> and isn't affiliated with it.</p>
+      <p>Every yeti, penguin and pine is drawn in code and every sound is synthesised in your browser. The game ships with no image or audio files at all.</p>
+      <p><a href="https://github.com/ahnafalfariza/vibe-game">Source on GitHub</a></p>
+    </footer>
+
+    <script type="module" src="/src/landing.ts"></script>
   </body>
 </html>

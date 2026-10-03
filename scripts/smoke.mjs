@@ -13,7 +13,7 @@ let url = process.argv[2];
 if (!url) {
   const port = process.env.PORT ?? '4173';
   server = spawn('bunx', ['vite', 'preview', '--port', port, '--strictPort'], { stdio: 'ignore' });
-  url = `http://localhost:${port}/?seed=7`;
+  url = `http://localhost:${port}/play/?seed=7`;
   await new Promise((r) => setTimeout(r, 2500));
 }
 
@@ -24,6 +24,26 @@ const browser = await chromium.launch({
 });
 const errors = [];
 try {
+  // The landing page, one level up from the game: loads clean, its widgets render.
+  {
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+    page.on('console', (m) => m.type() === 'error' && errors.push(`[landing] ${m.text()}`));
+    page.on('pageerror', (e) => errors.push(`[landing] ${e.message}`));
+    page.on('response', (r) => r.status() >= 400 && errors.push(`[landing] HTTP ${r.status()} ${r.url()}`));
+    await page.goto(new URL('..', url).href);
+    const verdicts = [];
+    for (const deg of [0, 120]) {
+      await page.$eval('#tilt', (el, v) => {
+        el.value = v;
+        el.dispatchEvent(new Event('input'));
+      }, String(deg));
+      verdicts.push(await page.textContent('#verdict'));
+    }
+    if (verdicts.join() !== 'Clean,Wipeout') errors.push(`[landing] landing judge said ${verdicts}`);
+    if (!(await page.locator('#shop li').count())) errors.push('[landing] the shop did not render');
+    await page.screenshot({ path: `${outDir}/landing.png` });
+    await page.close();
+  }
   for (const [name, viewport, scale] of [
     ['desktop', { width: 1280, height: 720 }, 1],
     ['phone', { width: 844, height: 390 }, 2],
