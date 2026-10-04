@@ -19,8 +19,9 @@ Portfolio / learning project. Not affiliated with the original.
 procedural slope, jump, hold-to-backflip, landing judgement, crash and
 recover, an avalanche chasing you, rocks, cabins with rideable roofs, ice
 patches, coin clusters, mounts (penguin, eagle, snowmobile, polar bear), score
-with a trick multiplier, goals and ranks, a coin shop, two biomes (Sunny
-Slopes and Twilight Pines), synthesised sound and music, and title / pause /
+with a trick multiplier, goals and ranks, a coin shop, five biomes (Sunny
+Slopes, Twilight Pines, Blossom Ridge, Glacier Gorge and Ember Peak), each
+with its own mix of terrain, synthesised sound and music, and title / pause /
 game-over screens. See [`docs/research.md`](docs/research.md) for the plan and
 [`docs/roadmap.md`](docs/roadmap.md) for progress and known rough edges.
 
@@ -41,7 +42,7 @@ Handy URL parameters (on `/play/`):
 | `?debug` | Show the debug overlay |
 | `?tune` | Open the tuning panel on load |
 | `?mount=penguin` | Start every run riding a mount (`penguin`, `eagle`, `snowmobile`, `bear`) |
-| `?biome=twilight` | Force a biome (`alpine`, `twilight`), even a locked one |
+| `?biome=twilight` | Force a biome (`alpine`, `twilight`, `blossom`, `glacier`, `ember`), even a locked one |
 | `?coins=5000` | Top the wallet up to at least this many coins (for testing the shop) |
 | `?profile=reset` | Wipe saved progress: coins, rank, goals, upgrades |
 
@@ -66,6 +67,13 @@ lets it catch up. Jump rocks, ride over cabin roofs (hit the wall and you
 wipe out), and use ice patches to pick up speed. Grab every coin in a cluster
 for a speed boost; coins are saved across runs for the shop.
 
+The mountain is built from shaped pieces: rollers, kickers, cliff drops,
+bowls, big booters, steep **chutes** that plunge at 45° and more, **steps**
+(a staircase of ledges), **whoops** (quick bumps to skip across) and
+**gaps** (a kicker over a trench). Each biome favours its own mix: Twilight
+Pines winds through bowls and bumps, Blossom Ridge is all bounce, Glacier
+Gorge is chutes, gaps and long ice, and Ember Peak is ledges, cliffs and rocks.
+
 Ski into animals to ride them. A **penguin** glides and flips faster, an
 **eagle** carries you through the air for a few seconds (hold to climb), a
 **snowmobile** roars along on a tank of fuel and can carry an animal too, and
@@ -79,8 +87,9 @@ number of flips, up to ×10. A sloppy landing or a crash resets it to ×1.
 You always have three **goals** (Goals on the title screen). Finish all three
 to rank up: each rank multiplies your whole score by another ×0.25, and some
 ranks unlock perks: rank 2 starts every run on a penguin, rank 3 unlocks the
-Twilight Pines biome, rank 5 brings mounts more often, rank 7 shortens
-wipeouts. Spend coins in the **Shop** on upgrades: head start, coin magnet,
+Twilight Pines biome, rank 4 Blossom Ridge, rank 5 brings mounts more often,
+rank 6 unlocks Glacier Gorge, rank 7 shortens wipeouts, and rank 8 unlocks
+Ember Peak. Spend coins in the **Shop** on upgrades: head start, coin magnet,
 cluster boost, avalanche delay, eagle wings, bigger tank, sturdy landings.
 
 ## Tuning the feel
@@ -97,7 +106,7 @@ index.html      Landing page (src/landing.ts, src/landing.css); the yeti on it i
 play/index.html The game
 src/
   sim/          Pure TypeScript game logic. No Phaser, fully unit-tested.
-    terrain.ts    Endless mountain from shaped templates, joined with Hermite curves
+    terrain.ts    Endless mountain from shaped templates (mixed per biome), joined with Hermite curves
     spawner.ts    Rocks, cabins, ice and coin clusters per terrain feature, placed fairly
     skier.ts      Custom skier physics: ground / air / crash, landing judgement, hits
     mounts.ts     The mount stack, shields, eagle flight, fuel, and per-mount feel
@@ -109,7 +118,7 @@ src/
   ui/           HUD, DOM menus (title / pause / game over) and the tuning panel
   audio.ts      Every sound and the music loop, synthesised with WebAudio (no audio files)
   profile.ts    Saved progress (coins, rank, goals, upgrades) in localStorage
-  biomes.ts     Biome palettes, backdrops and spawn tables
+  biomes.ts     Biome palettes, backdrops, terrain mixes and spawn tables
   scenes/       PlayScene wires input → sim → views, three cameras
   tuning.ts     Every feel number in one place
 tests/          Vitest unit tests for the sim

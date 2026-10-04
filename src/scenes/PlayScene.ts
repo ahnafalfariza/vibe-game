@@ -130,6 +130,7 @@ export class PlayScene extends Phaser.Scene {
       avalanche: play,
       startMount: play && this.ctx.startMount ? this.ctx.startMount : setup.startMount,
       table: biome.spawns,
+      terrain: biome.terrain,
       scoreMultiplier: setup.scoreMultiplier,
     });
     this.goals = play ? new RunGoals(profile, () => new Rng(randomSeed())) : null;

@@ -133,7 +133,7 @@ export const DEFAULT_TUNING: Readonly<Tuning> = Object.freeze({
   mountainSlope: 0.3,
   avalancheStartGap: 350,
   avalancheSpeed: 500,
-  avalancheAccel: 6,
+  avalancheAccel: 7.5,
   avalancheMaxGap: 2400,
   iceFriction: 0.003,
   iceDrag: 0.4,

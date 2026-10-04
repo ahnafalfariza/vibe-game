@@ -1,4 +1,4 @@
-import { Terrain } from './terrain';
+import { Terrain, type TerrainMix } from './terrain';
 import { Skier, type SkierEvent, type SkierInput } from './skier';
 import { Spawner, type SpawnEvent, type SpawnTable } from './spawner';
 import { Mounts, type MountEvent, type MountKind } from './mounts';
@@ -53,6 +53,8 @@ export interface RunOptions {
   scoreMultiplier?: number;
   /** What goes on the slope (a biome's spawn table). Default: the alpine one. */
   table?: SpawnTable;
+  /** Which shapes the mountain favours (a biome's terrain mix). Default: the plain mix. */
+  terrain?: TerrainMix;
 }
 
 /** Points awarded for a landing, mount or smash (pushed right after its event). */
@@ -103,11 +105,11 @@ export class Run {
   constructor(
     readonly seed: number,
     readonly tuning: Tuning,
-    { avalanche = true, obstacles = avalanche, startMount = [], table, scoreMultiplier = 1 }: RunOptions = {},
+    { avalanche = true, obstacles = avalanche, startMount = [], table, terrain, scoreMultiplier = 1 }: RunOptions = {},
   ) {
     this.avalanche = avalanche;
     this.scoreMultiplier = scoreMultiplier;
-    this.terrain = new Terrain(seed, tuning);
+    this.terrain = new Terrain(seed, tuning, terrain);
     this.spawner = new Spawner(this.terrain, tuning, seed, obstacles, this.startX, table);
     this.mounts = new Mounts(tuning);
     this.skier = new Skier(this.spawner, this.mounts.tuning, this.startX);

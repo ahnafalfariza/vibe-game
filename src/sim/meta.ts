@@ -234,8 +234,11 @@ export interface Perk {
 export const PERKS: readonly Perk[] = [
   { rank: 2, name: 'Penguin start', text: 'Every run starts on a penguin', start: 'penguin' },
   { rank: 3, name: 'Twilight Pines', text: 'A new mountain to ski', biome: 'twilight' },
+  { rank: 4, name: 'Blossom Ridge', text: 'A bouncy spring mountain', biome: 'blossom' },
   { rank: 5, name: 'Safari season', text: 'Mounts turn up more often', apply: (t) => (t.mountDensity *= 1.5) },
+  { rank: 6, name: 'Glacier Gorge', text: 'Steep chutes and gaps to clear', biome: 'glacier' },
   { rank: 7, name: 'Thick fur', text: 'Back on your feet 30% faster after a wipeout', apply: (t) => (t.crashDuration *= 0.7) },
+  { rank: 8, name: 'Ember Peak', text: 'Cliffs and ledges on a volcano', biome: 'ember' },
 ];
 
 export function perksAt(rank: number): Perk[] {

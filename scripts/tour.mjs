@@ -85,7 +85,7 @@ await shot('5b-zoomed-out');
 
 // Obstacles and coins, on a mountain where they all turn up early. An
 // autopilot hops rocks and jumps onto cabin roofs; each moment is shot once.
-const seed2 = process.env.OBSTACLE_SEED ?? 36;
+const seed2 = process.env.OBSTACLE_SEED ?? 95;
 const p2 = await browser.newPage({ viewport: { width: w, height: h }, deviceScaleFactor: dpr });
 p2.on('pageerror', (e) => errors.push(e.message));
 await p2.clock.install({ time: 0 });
@@ -246,12 +246,19 @@ if (await rockUntil(p3, (st) => st.shieldsLost > 0)) {
   await wait(p3, 120);
   await snap(p3, '13-shield-lost');
 } else missed.push('13-shield-lost');
-// Eagle: circling above the slope, then jump into it and climb.
-await idleShot(p3, 'eagle', '14-eagle-idle');
-const eagleAt = await p3.evaluate(() => window.__game.scene.getScene('play').run.spawner.mounts.at(-1).ax);
-const near = await until(p3, (st) => st.state === 'carried' || (st.x > eagleAt - 300 && st.mode === 'ground'), 6000);
-if (near?.state !== 'carried') await p3.keyboard.down('Space');
-await moment(p3, '15-eagle-grab', (st) => st.state === 'carried', 2000);
+// Eagle: circling above the slope, then jump into it and climb (a few tries:
+// the yeti may be mid-hop when it gets there and sail past).
+let grabbed = null;
+for (let i = 0; i < 3 && !grabbed; i++) {
+  await idleShot(p3, 'eagle', '14-eagle-idle');
+  const eagleAt = await p3.evaluate(() => window.__game.scene.getScene('play').run.spawner.mounts.at(-1).ax);
+  const near = await until(p3, (st) => st.state === 'carried' || (st.x > eagleAt - 300 && st.mode === 'ground'), 6000);
+  if (near?.state !== 'carried') await p3.keyboard.down('Space');
+  grabbed = await until(p3, (st) => st.state === 'carried', 2000);
+  if (!grabbed) await p3.keyboard.up('Space');
+}
+if (grabbed) await snap(p3, '15-eagle-grab', grabbed);
+else missed.push('15-eagle-grab');
 await p3.keyboard.down('Space');
 await wait(p3, 1500);
 await snap(p3, '15b-eagle-flight');

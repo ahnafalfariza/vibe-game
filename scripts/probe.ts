@@ -1,5 +1,5 @@
 // Headless feel probe: run the simulation with simple bots and print stats.
-// Usage: bun run probe   (BIOME=twilight bun run probe for another biome's spawns)
+// Usage: bun run probe   (BIOME=twilight bun run probe for another biome)
 import { Run, SIM_DT } from '../src/sim/run';
 import { createTuning, type Tuning } from '../src/tuning';
 import type { RunEvent } from '../src/sim/run';
@@ -7,7 +7,7 @@ import type { Cluster } from '../src/sim/spawner';
 import { MOUNT_KINDS, type MountKind, type WildMount } from '../src/sim/mounts';
 import { BIOMES, findBiome } from '../src/biomes';
 
-const spawns = (findBiome(process.env.BIOME ?? null) ?? BIOMES[0]).spawns;
+const { spawns, terrain } = findBiome(process.env.BIOME ?? null) ?? BIOMES[0];
 
 type Bot = (run: Run, t: number) => { held: boolean; pressed: boolean };
 
@@ -72,7 +72,7 @@ const BOTS: [string, () => Bot][] = [
 
 function simulate(name: string, bot: Bot, seed: number, seconds: number) {
   // The avalanche is off here so every bot gets the full time; survive() tests it.
-  const run = new Run(seed, createTuning(), { avalanche: false, obstacles: true, table: spawns });
+  const run = new Run(seed, createTuning(), { avalanche: false, obstacles: true, table: spawns, terrain });
   const wild = new Set<WildMount>();
   const events: RunEvent[] = [];
   let prevHeld = false;
@@ -141,7 +141,7 @@ function simulate(name: string, bot: Bot, seed: number, seconds: number) {
 
 /** Seconds until the avalanche catches the bot (capped at 5 minutes). Finished runs go in `runs`. */
 function survive(bot: Bot, seed: number, tuning: Tuning = createTuning(), startMount?: MountKind, runs?: Run[]): string {
-  const run = new Run(seed, tuning, { startMount, table: spawns });
+  const run = new Run(seed, tuning, { startMount, table: spawns, terrain });
   let prevHeld = false;
   let minGap = Infinity;
   for (let t = 0; t < 300 && !run.caught; t += SIM_DT) {

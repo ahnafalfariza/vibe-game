@@ -1,14 +1,14 @@
 import { applyPalette, type PaletteKey } from './render/palette';
 import { ALPINE, type SpawnKind, type SpawnTable } from './sim/spawner';
-import type { FeatureKind } from './sim/terrain';
+import type { FeatureKind, TerrainMix } from './sim/terrain';
 import { biomeUnlocked } from './sim/meta';
 import { getProfile } from './profile';
 
 // Biomes: the same game on a different mountain. A biome repaints the world
 // (palette overrides; the yeti keeps its own colours), dresses the backdrop,
-// and changes what turns up on the slope (a spawn table). applyBiome() swaps
-// it in before a scene builds its views; the views read `palette` and
-// currentBiome() as they draw.
+// shapes the slope (a terrain mix) and changes what turns up on it (a spawn
+// table). applyBiome() swaps it in before a scene builds its views; the views
+// read `palette` and currentBiome() as they draw.
 
 export interface Biome {
   id: string;
@@ -25,8 +25,10 @@ export interface Biome {
   clouds: number;
   /** Pine density, 1 = alpine: trees on the slope and the forest on the backdrop ridge. */
   forest: number;
-  /** Falling snow density, 1 = alpine. */
+  /** Falling snow density, 1 = alpine. Falls in palette.flake: petals, embers… */
   snowfall: number;
+  /** Which shapes the mountain favours. */
+  terrain: TerrainMix;
   spawns: SpawnTable;
 }
 
@@ -58,6 +60,7 @@ export const BIOMES: readonly Biome[] = [
     clouds: 5,
     forest: 1,
     snowfall: 1,
+    terrain: {},
     spawns: ALPINE,
   },
   {
@@ -109,7 +112,125 @@ export const BIOMES: readonly Biome[] = [
     clouds: 3,
     forest: 1.6,
     snowfall: 0.6,
+    // Winding forest trails: bowls and bumps, fewer big plunges.
+    terrain: { bowl: 1.5, rollers: 1.3, whoops: 1.5, chute: 0.6, booter: 0.7 },
     spawns: { ...reweigh(ALPINE, { rock: 0.35, cabin: 3, ice: 1.3 }), iceLen: [1000, 1700] },
+  },
+  {
+    // Spring thaw: cherry blossom in the pines and petals on the breeze. A
+    // bouncy mountain of whoops, rollers and kickers, with coins everywhere.
+    id: 'blossom',
+    name: 'Blossom Ridge',
+    lockHint: 'Reach rank 4',
+    colors: {
+      skyTop: 0x7fbcf2,
+      skyBottom: 0xffe1ee,
+      sun: 0xfff3d1,
+      mountainFar: 0xc7c1ee,
+      mountainFarCap: 0xf8f4ff,
+      mountainMid: 0xa99bdc,
+      mountainMidCap: 0xeee8ff,
+      forestMid: 0xe08fbb,
+      cloud: 0xfff7fb,
+
+      snow: 0xfffafd,
+      snowBand1: 0xf6e4ef,
+      snowBand2: 0xebcde1,
+      snowBand3: 0xdab3d0,
+      pine: 0xf59cc6,
+      pineDark: 0xdc77a6,
+      trunk: 0x7a4f45,
+      flake: 0xffa9cf,
+
+      roof: 0xc4566c,
+      roofShade: 0x9c3f54,
+    },
+    night: false,
+    aurora: false,
+    clouds: 6,
+    forest: 1.3,
+    snowfall: 0.7,
+    terrain: { whoops: 3, rollers: 2, kicker: 1.5, chute: 0.4, steps: 0.6, booter: 0.6 },
+    spawns: reweigh(ALPINE, { rock: 0.6, cabin: 1.5, coinLine: 1.3, coinArc: 1.3 }),
+  },
+  {
+    // A bright, bitter day in a blue-ice gorge: gaps to clear, steep chutes
+    // and long sheets of ice.
+    id: 'glacier',
+    name: 'Glacier Gorge',
+    lockHint: 'Reach rank 6',
+    colors: {
+      skyTop: 0x2b86d6,
+      skyBottom: 0xc9f3ff,
+      sun: 0xffffff,
+      mountainFar: 0x9bd3ea,
+      mountainFarCap: 0xf0fdff,
+      mountainMid: 0x63afd3,
+      mountainMidCap: 0xdaf5ff,
+      forestMid: 0x3f86ad,
+
+      snow: 0xf3fdff,
+      snowBand1: 0xd0f0f8,
+      snowBand2: 0x9edcee,
+      snowBand3: 0x6cc2df,
+      pine: 0x2a6c80,
+      pineDark: 0x1f5667,
+      flake: 0xe8fbff,
+
+      rock: 0x5b7f9c,
+      rockShade: 0x3e5d78,
+      rockLight: 0x8fb4cf,
+      ice: 0x98efff,
+      iceDeep: 0x34b6e6,
+    },
+    night: false,
+    aurora: false,
+    clouds: 2,
+    forest: 0.5,
+    snowfall: 0.4,
+    terrain: { chute: 2, gap: 2.5, bowl: 1.5, rollers: 0.5, whoops: 0.5, cruise: 0.6 },
+    spawns: { ...reweigh(ALPINE, { ice: 2, cabin: 0.5 }), iceLen: [1000, 1800] },
+  },
+  {
+    // A volcano at sunset: ash-dusted snow, charred pines, embers drifting
+    // down. Ledges, cliffs and booters: the biggest air, and the most rocks.
+    id: 'ember',
+    name: 'Ember Peak',
+    lockHint: 'Reach rank 8',
+    colors: {
+      skyTop: 0x3b1d4a,
+      skyBottom: 0xff9a5c,
+      sun: 0xffc46b,
+      mountainFar: 0x7a4868,
+      mountainFarCap: 0xd48d9c,
+      mountainMid: 0x55304d,
+      mountainMidCap: 0xa66c85,
+      forestMid: 0x37203a,
+      cloud: 0xffb48f,
+      warning: 0xffd166,
+
+      snow: 0xf3e6e3,
+      snowRim: 0xfff5f0,
+      snowBand1: 0xdccaca,
+      snowBand2: 0xbaa1a8,
+      snowBand3: 0x8f7585,
+      pine: 0x4a3a40,
+      pineDark: 0x382b31,
+      trunk: 0x2e2226,
+      flake: 0xff9f5a,
+
+      rock: 0x3d3442,
+      rockShade: 0x27212c,
+      rockLight: 0x62566b,
+      chimney: 0x5d5466,
+    },
+    night: false,
+    aurora: false,
+    clouds: 4,
+    forest: 0.5,
+    snowfall: 0.8,
+    terrain: { steps: 3, drop: 2.5, booter: 2, cruise: 0.5, whoops: 0.4, rollers: 0.6 },
+    spawns: reweigh(ALPINE, { rock: 1.6, cabin: 0.4, ice: 0.3 }),
   },
 ];
 

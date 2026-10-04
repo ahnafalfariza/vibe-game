@@ -1,16 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { Run, SIM_DT, type RunEvent } from '../src/sim/run';
-import { ALPINE, FORCED_AIR, START_CLEAR, Spawner, type Entity, type SpawnTable } from '../src/sim/spawner';
-import { Terrain } from '../src/sim/terrain';
+import { ALPINE, FORCED_AIR, START_CLEAR, Spawner, type Entity } from '../src/sim/spawner';
+import { Terrain, type TemplateKind } from '../src/sim/terrain';
 import { createTuning } from '../src/tuning';
-import { BIOMES, applyBiome, findBiome } from '../src/biomes';
+import { BIOMES, applyBiome, findBiome, type Biome } from '../src/biomes';
+import { PERKS } from '../src/sim/meta';
 import { palette } from '../src/render/palette';
 
-/** Every entity the spawner places up to `toX`, in order. Mounts are off: these tests are about the obstacles. */
-function spawnAll(seed: number, toX: number, table: SpawnTable): Entity[] {
+/** Every entity the spawner places up to `toX` on a biome's mountain, in order. Mounts are off: these tests are about the obstacles. */
+function spawnAll(seed: number, toX: number, biome: Biome): Entity[] {
   const tuning = createTuning({ mountDensity: 0 });
-  const terrain = new Terrain(seed, tuning);
-  const spawner = new Spawner(terrain, tuning, seed, true, 0, table);
+  const terrain = new Terrain(seed, tuning, biome.terrain);
+  const spawner = new Spawner(terrain, tuning, seed, true, 0, biome.spawns);
   const seen = new Set<Entity>();
   for (let x = 0; x < toX; x += 400) {
     terrain.ensure(x + 6000);
@@ -30,10 +31,10 @@ function fnv(s: string): string {
   return (h >>> 0).toString(16);
 }
 
-function count(table: SpawnTable) {
+function count(biome: Biome) {
   const n = { rock: 0, cabin: 0, ice: 0, iceLen: 0 };
   for (let seed = 1; seed <= 10; seed++) {
-    for (const e of spawnAll(seed, 100000, table)) {
+    for (const e of spawnAll(seed, 100000, biome)) {
       if (e.kind === 'coin') continue;
       n[e.kind]++;
       if (e.kind === 'ice') n.iceLen += e.x1 - e.x0;
@@ -43,24 +44,53 @@ function count(table: SpawnTable) {
 }
 
 describe('Biomes', () => {
-  it('leave the default biome spawning exactly what it did before biomes existed', () => {
+  it('leave the default biome spawning exactly what it did', () => {
     expect(BIOMES[0].spawns).toBe(ALPINE);
-    // Recorded on the commit before biomes were added.
+    expect(BIOMES[0].terrain).toEqual({});
+    // Recorded when the chute, steps, whoops and gap templates were added.
     for (const [seed, n, hash] of [
-      [5, 93, '9f35da39'],
-      [36, 135, 'f89a2ac5'],
+      [5, 101, '8f33f4a0'],
+      [36, 128, '11daad28'],
     ] as const) {
-      const es = spawnAll(seed, 60000, BIOMES[0].spawns);
+      const es = spawnAll(seed, 60000, BIOMES[0]);
       expect([es.length, fnv(summary(es))], `seed ${seed}`).toEqual([n, hash]);
     }
   });
 
   it('twilight has fewer rocks, more cabins and longer ice than alpine', () => {
-    const alpine = count(findBiome('alpine')!.spawns);
-    const twilight = count(findBiome('twilight')!.spawns);
+    const alpine = count(findBiome('alpine')!);
+    const twilight = count(findBiome('twilight')!);
     expect(twilight.rock).toBeLessThan(alpine.rock * 0.75);
     expect(twilight.cabin).toBeGreaterThan(alpine.cabin * 1.25);
     expect(twilight.iceLen / twilight.ice).toBeGreaterThan((alpine.iceLen / alpine.ice) * 1.25);
+  });
+
+  it('shape their mountains: the favourite template turns up more than on Sunny Slopes', () => {
+    const share = (b: Biome, kind: TemplateKind) => {
+      let n = 0;
+      let all = 0;
+      for (let seed = 1; seed <= 10; seed++) {
+        const t = new Terrain(seed, createTuning(), b.terrain);
+        t.ensure(100000);
+        for (const f of t.features) {
+          all++;
+          if (f.kind === kind) n++;
+        }
+      }
+      return n / all;
+    };
+    for (const b of BIOMES.slice(1)) {
+      const [fav] = Object.entries(b.terrain).sort((p, q) => q[1] - p[1])[0] as [TemplateKind, number];
+      expect(share(b, fav), `${b.id} ${fav}`).toBeGreaterThan(share(BIOMES[0], fav) * 1.3);
+    }
+  });
+
+  it('unlock at the rank their lock hint says, one perk each', () => {
+    for (const b of BIOMES.slice(1)) {
+      const perks = PERKS.filter((p) => p.biome === b.id);
+      expect(perks, b.id).toHaveLength(1);
+      expect(b.lockHint).toBe(`Reach rank ${perks[0].rank}`);
+    }
   });
 
   it('repaint the world but never the yeti', () => {
@@ -78,8 +108,8 @@ describe('Biomes', () => {
   for (const biome of BIOMES) {
     describe(biome.name, () => {
       it('spawns deterministically per seed', () => {
-        expect(summary(spawnAll(5, 40000, biome.spawns))).toBe(summary(spawnAll(5, 40000, biome.spawns)));
-        expect(summary(spawnAll(5, 40000, biome.spawns))).not.toBe(summary(spawnAll(6, 40000, biome.spawns)));
+        expect(summary(spawnAll(5, 40000, biome))).toBe(summary(spawnAll(5, 40000, biome)));
+        expect(summary(spawnAll(5, 40000, biome))).not.toBe(summary(spawnAll(6, 40000, biome)));
       });
 
       it('places valid obstacles: past the start, spaced out, ice of the right length', () => {
@@ -87,7 +117,7 @@ describe('Biomes', () => {
         const kinds = new Set<string>();
         for (let seed = 1; seed <= 10; seed++) {
           let prev: Entity | null = null;
-          for (const e of spawnAll(seed, 60000, biome.spawns)) {
+          for (const e of spawnAll(seed, 60000, biome)) {
             kinds.add(e.kind);
             if (e.kind === 'coin') continue;
             const where = `seed ${seed} ${e.kind} at ${e.x0.toFixed(0)}`;
@@ -108,7 +138,7 @@ describe('Biomes', () => {
         // As in spawner.test.ts: a rider who moves exactly like the idle ghost.
         const tuning = createTuning({ coinClusterBoost: 0, iceFriction: 0.03, iceDrag: 1, mountDensity: 0 });
         for (let seed = 1; seed <= 4; seed++) {
-          const run = new Run(seed, tuning, { avalanche: false, obstacles: true, table: biome.spawns });
+          const run = new Run(seed, tuning, { avalanche: false, obstacles: true, table: biome.spawns, terrain: biome.terrain });
           const sk = run.skier;
           const events: RunEvent[] = [];
           for (let t = 0; t < 60; t += SIM_DT) {
