@@ -105,6 +105,11 @@ export const ALPINE: SpawnTable = {
   drop: { rock: [2, 3], cabin: [2, 2], coinArc: [2.5, 2.5], mount: [5, 5], none: [1.5, 1] },
   bowl: { rock: [1.5, 2], ice: [2, 2], coinLine: [1.5, 1.5], coinArc: [1.5, 1.5], mount: [6, 6], none: [1.5, 1] },
   booter: { rock: [2, 3], cabin: [1, 1], coinArc: [3, 3], mount: [4, 4], none: [1.5, 1] },
+  // Steep faces take no rocks or cabins (too steep), so these mostly land on the runouts and ledges.
+  chute: { rock: [1, 2], cabin: [2, 2], ice: [1, 1.5], coinLine: [3, 2.5], coinArc: [2.5, 2.5], mount: [5, 5], none: [1, 0.5] },
+  steps: { rock: [1, 2], coinLine: [2, 2], coinArc: [4, 4], mount: [3, 3], none: [1.5, 1] },
+  whoops: { rock: [0.7, 1.5], coinLine: [3.5, 3], coinArc: [1.5, 1.5], mount: [4, 4], none: [1.5, 1] },
+  gap: { rock: [1, 2], ice: [1, 1], coinArc: [4, 4], mount: [3, 3], none: [1.5, 1] },
 };
 
 /** Which mount, once one is due: from how far down the mountain (px), and how common. */

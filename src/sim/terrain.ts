@@ -28,7 +28,13 @@ export interface TerrainSample {
   ice?: boolean;
 }
 
-export type FeatureKind = 'start' | 'cruise' | 'rollers' | 'kicker' | 'drop' | 'bowl' | 'booter';
+export type FeatureKind = 'start' | 'cruise' | 'rollers' | 'kicker' | 'drop' | 'bowl' | 'booter' | 'chute' | 'steps' | 'whoops' | 'gap';
+
+/** The shapes the mountain is built from (everything but the opening run-up). */
+export type TemplateKind = Exclude<FeatureKind, 'start'>;
+
+/** Multipliers on how often each template turns up: a biome's character. Missing = 1, 0 = never. */
+export type TerrainMix = Partial<Record<TemplateKind, number>>;
 
 export interface Feature {
   kind: FeatureKind;
@@ -41,17 +47,38 @@ type Step = [dx: number, offset: number, mRel: number];
 
 type Template = (r: Rng, difficulty: number, slope: number) => Step[];
 
-const TEMPLATES: Record<Exclude<FeatureKind, 'start'>, Template> = {
+/**
+ * Steps from a gradient profile: [dx, m] pairs, the gradient changing linearly
+ * along each one. Heights follow from the gradients, so every piece is a plain
+ * parabola: no wiggles, whatever the numbers. Then two equal stretches ease
+ * back onto the trend line (gradient to whatever closes the gap, then back to
+ * the slope), so a profile can end anywhere.
+ */
+function shape(slope: number, segs: [dx: number, m: number][]): Step[] {
+  let off = 0;
+  let m = slope;
+  const steps = segs.map(([dx, mb]): Step => {
+    off += ((m + mb) / 2 - slope) * dx;
+    m = mb;
+    return [dx, off, mb - slope];
+  });
+  const l = Math.max(400, 4 * Math.abs(off));
+  const mr = 1.5 * slope - m / 2 - off / l;
+  steps.push([l, off + ((m + mr) / 2 - slope) * l, mr - slope], [l, 0, 0]);
+  return steps;
+}
+
+const TEMPLATES: Record<TemplateKind, Template> = {
   // A long, even run: a breather that lets speed build.
   cruise: (r) => [[r.range(500, 1000), 0, 0]],
 
-  // Rolling bumps. Big enough ones launch you at speed.
+  // Rolling bumps, no two alike. Big enough ones launch you at speed.
   rollers: (r, d) => {
-    const n = r.int(2, 4);
-    const w = r.range(460, 720);
-    const a = r.range(40, 75) * (1 + 0.5 * d);
     const steps: Step[] = [];
-    for (let i = 0; i < n; i++) {
+    let w = 0;
+    for (let i = r.int(2, 4); i > 0; i--) {
+      w = r.range(420, 760);
+      const a = r.range(35, 80) * (1 + 0.5 * d);
       steps.push([w / 2, -a, 0], [w / 2, a * 0.35, 0]);
     }
     steps.push([w / 2, 0, 0]);
@@ -108,15 +135,69 @@ const TEMPLATES: Record<Exclude<FeatureKind, 'start'>, Template> = {
       [r.range(900, 1200), 0, 0],
     ];
   },
+
+  // A flat shelf rolls over into a long, steep plunge (45° and more), then a
+  // deep compression: a rush of speed to carry down the runout.
+  chute: (r, d, slope) => {
+    const steep = 1 + 0.3 * d;
+    return shape(slope, [
+      [r.range(500, 750), 0.02],
+      [r.range(320, 420), steep],
+      [r.range(450, 650) * (1 + 0.4 * d), steep],
+      [r.range(320, 420), 0.05],
+    ]);
+  },
+
+  // A staircase of flat ledges, each ending in a sharp drop-off: a rhythm of
+  // short flights onto the next ledge.
+  steps: (r, d, slope) => {
+    const segs: [number, number][] = [[200, 0]];
+    for (let i = r.int(2, 4); i > 0; i--) {
+      segs.push([r.range(380, 560), 0], [60, 1.1], [r.range(140, 220) * (1 + 0.5 * d), 1.1], [160, 0]);
+    }
+    return shape(slope, segs);
+  },
+
+  // Quick little bumps in a row: at speed you skip from crest to crest.
+  whoops: (r, d, slope) => {
+    const k = r.range(0.35, 0.5) * (1 + 0.4 * d);
+    const segs: [number, number][] = [];
+    for (let i = r.int(4, 7); i > 0; i--) {
+      const q = r.range(90, 130);
+      segs.push([q, slope - k], [q, slope], [q, slope + k], [q, slope]);
+    }
+    return shape(slope, segs);
+  },
+
+  // A kicker over a trench: clear it onto the downhill side, or drop in and
+  // climb back out a little slower.
+  gap: (r, d, slope) => {
+    const lip = -0.5 - 0.25 * d;
+    return shape(slope, [
+      [r.range(450, 600), 0.5],
+      [r.range(180, 240), lip],
+      [70, 1.2],
+      [r.range(80, 140) * (1 + 0.5 * d), 1.2],
+      [200, -0.4],
+      [90, -0.4],
+      [180, 0.7],
+      [r.range(500, 700), 0.7],
+      [r.range(250, 350), 0.15],
+    ]);
+  },
 };
 
-const BASE_WEIGHTS: Record<Exclude<FeatureKind, 'start'>, number> = {
+const BASE_WEIGHTS: Record<TemplateKind, number> = {
   cruise: 1.5,
   rollers: 3,
   kicker: 2.5,
   drop: 1.5,
   bowl: 2,
   booter: 1,
+  chute: 1.5,
+  steps: 1.5,
+  whoops: 2,
+  gap: 1.5,
 };
 
 /** Distance (px) over which difficulty ramps from 0 to 1. */
@@ -135,6 +216,7 @@ export class Terrain {
   constructor(
     readonly seed: number,
     private readonly tuning: Pick<Tuning, 'mountainSlope'>,
+    private readonly mix: TerrainMix = {},
     startX = -2400,
   ) {
     this.rng = new Rng(seed);
@@ -223,10 +305,12 @@ export class Terrain {
   private appendRandom(): void {
     const difficulty = Math.min(1, Math.max(0, this.endX / DIFFICULTY_RAMP));
     const weights = { ...BASE_WEIGHTS };
-    weights.kicker += difficulty;
-    weights.drop += difficulty;
-    weights.booter += difficulty;
+    for (const k of ['kicker', 'drop', 'booter', 'chute', 'gap'] as const) weights[k] += difficulty;
     if (this.lastKind !== 'start') weights[this.lastKind] *= 0.25;
+    for (const k of Object.keys(weights) as TemplateKind[]) {
+      weights[k] *= this.mix[k] ?? 1;
+      if (!(weights[k] > 0)) delete weights[k];
+    }
     const kind = this.rng.weighted(weights);
     this.append(kind, TEMPLATES[kind](this.rng, difficulty, this.tuning.mountainSlope));
   }
