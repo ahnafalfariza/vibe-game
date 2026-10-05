@@ -372,6 +372,29 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* Progress, and on the Goals panel a skip button under it. */
+.goal-side {
+  display: grid;
+  justify-items: end;
+  gap: 4px;
+}
+
+.btn.skip {
+  padding: 0.15em 0.7em;
+  border-width: 2px;
+  font-size: clamp(12px, 2.1vmin, 15px);
+  white-space: nowrap;
+  box-shadow: 0 2px 0 var(--ink);
+}
+
+.btn.skip:not(:disabled) {
+  background: var(--yellow);
+}
+
+.btn.skip:disabled .coin {
+  opacity: 0.6;
+}
+
 .goal.fresh {
   background: #fff1bf;
   animation: pop-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) 0.2s backwards;

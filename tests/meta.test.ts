@@ -18,6 +18,8 @@ import {
   levelMultiplier,
   rideSummary,
   runSetup,
+  skipCost,
+  skipGoal,
   tierFor,
   upgradeCost,
   type Goal,
@@ -298,6 +300,23 @@ describe('Designed levels', () => {
       return [secondWind, multiplierFloor];
     };
     expect([at(8), at(9), at(10), at(14)]).toEqual([[false, 1], [true, 1], [true, 2], [true, 2]]);
+  });
+
+  it('skips a goal for 50 coins a level, and the skip survives a reload', () => {
+    const p = normalizeProfile({ version: 2, coins: 250, level: 4 });
+    expect(skipCost(4)).toBe(200);
+    expect(skipGoal(p, 1)).toBe(true);
+    expect([p.coins, p.goals[1].done]).toEqual([50, true]);
+    expect(skipGoal(p, 1)).toBe(false); // already done
+    expect(skipGoal(p, 0)).toBe(false); // can't pay
+    expect(skipGoal(p, 7)).toBe(false);
+    expect(p.coins).toBe(50);
+    expect(normalizeProfile(JSON.parse(JSON.stringify(p))).goals[1].done).toBe(true);
+    // Skipping all three still levels up at the end of the next run.
+    p.coins = 1000;
+    skipGoal(p, 0);
+    skipGoal(p, 2);
+    expect(new RunGoals(p, rng).finish(progress()).levelUp).toMatchObject({ level: 5 });
   });
 
   it('pays coins for each level-up, and names the levels past 10 Legend', () => {

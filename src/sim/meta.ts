@@ -281,6 +281,21 @@ export function levelUpCoins(level: number): number {
   return 50 * Math.min(level, LEVELS.length);
 }
 
+/** Price of skipping one goal at `level`. */
+export function skipCost(level: number): number {
+  return 50 * level;
+}
+
+/** Pay to count the goal at `index` as done. False if it's done already or the wallet can't cover it. */
+export function skipGoal(p: Profile, index: number): boolean {
+  const g = p.goals[index];
+  const cost = skipCost(p.level);
+  if (!g || g.done || p.coins < cost) return false;
+  p.coins -= cost;
+  g.done = true;
+  return true;
+}
+
 export interface Perk {
   level: number;
   name: string;

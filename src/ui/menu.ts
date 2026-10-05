@@ -15,6 +15,8 @@ import {
   isTotalGoal,
   levelName,
   nextPerk,
+  skipCost,
+  skipGoal,
   levelMultiplier,
   upgradeCost,
   upgradeLevel,
@@ -51,6 +53,8 @@ export interface GoalLine {
   done: boolean;
   /** Completed during this run. */
   fresh: boolean;
+  /** Goals panel only: what skipping it costs, and whether the wallet covers it. */
+  skip?: { cost: number; afford: boolean };
 }
 
 export interface RunResult {
@@ -81,10 +85,14 @@ const COIN = '<i class="coin" aria-hidden="true"></i>';
 function goalList(goals: GoalLine[]): string {
   return goals
     .map(
-      (g) => `<li class="goal${g.done ? ' done' : ''}${g.fresh ? ' fresh' : ''}">
+      (g, i) => `<li class="goal${g.done ? ' done' : ''}${g.fresh ? ' fresh' : ''}">
         <span class="tick" aria-hidden="true"></span>
         <span class="goal-text">${g.done ? '<span class="sr-only">Done: </span>' : ''}${g.text}</span>
-        <span class="goal-count">${g.done ? (g.fresh ? 'New!' : 'Done') : g.progress}</span>
+        <span class="goal-side"><span class="goal-count">${g.done ? (g.fresh ? 'New!' : 'Done') : g.progress}</span>${
+          g.skip && !g.done
+            ? `<button class="btn small skip" data-act="skip" data-index="${i}"${g.skip.afford ? '' : ' disabled'} aria-label="Skip this goal for ${fmt(g.skip.cost)} coins">Skip ${fmt(g.skip.cost)} ${COIN}</button>`
+            : ''
+        }</span>
       </li>`,
     )
     .join('');
@@ -224,6 +232,7 @@ export class Menu {
       const act = el?.dataset.act;
       if (!act) return;
       if (act === 'buy') return this.buy(el!.dataset.id as UpgradeId);
+      if (act === 'skip') return this.skip(Number(el!.dataset.index));
       this.actions.click();
       if (act === 'pip') this.screens.goals.querySelector('.card-foot')!.textContent = levelReward(Number(el!.dataset.level));
       if (act === 'mute') this.setMuted(this.actions.toggleMute());
@@ -298,8 +307,9 @@ export class Menu {
     const el = this.screens.goals;
     el.querySelector('.card-head')!.textContent = `${levelName(p.level)}${p.level === LEVELS.length ? ' · the finale' : ''} · score ×${levelMultiplier(p.level)}`;
     el.querySelector('.level-path')!.innerHTML = levelPath(p.level);
+    const skip = { cost: skipCost(p.level), afford: p.coins >= skipCost(p.level) };
     el.querySelector('.goal-list')!.innerHTML = goalList(
-      p.goals.map((g) => ({ text: goalText(g), progress: (isTotalGoal(g) ? '' : 'Best ') + goalProgressText(g), done: g.done, fresh: false })),
+      p.goals.map((g) => ({ text: goalText(g), progress: (isTotalGoal(g) ? '' : 'Best ') + goalProgressText(g), done: g.done, fresh: false, skip })),
     );
     const perk = nextPerk(p.level);
     const all = p.goals.every((g) => g.done);
@@ -338,6 +348,16 @@ export class Menu {
     if (document.activeElement === document.body || (document.activeElement as HTMLButtonElement | null)?.disabled) {
       this.screens.shop.querySelector<HTMLElement>('.buy:not(:disabled), [data-act="close"]')?.focus();
     }
+  }
+
+  /** Pay to count a goal as done. */
+  private skip(index: number): void {
+    if (skipGoal(getProfile(), index)) {
+      persist();
+      this.actions.purchase();
+    }
+    this.renderGoals();
+    this.screens.goals.querySelector<HTMLElement>('.skip:not(:disabled), [data-act="close"]')?.focus();
   }
 
   private openPanel(panel: Panel): void {
