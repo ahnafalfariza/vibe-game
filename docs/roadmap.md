@@ -16,7 +16,8 @@ human, then polish:
 1. **Real-phone test** on the deployed URL: iOS audio unlock, touch latency, orientation.
 2. **Playtest sign-off:** the Phase 0 "is 60 s fun?" gate, now with the full game.
 3. **Balance pass** from real play: goal tiers (mid-tier "ride 2 penguins" needs ~1,200 m runs), shop prices, cabin rarity (fairness rules leave few spots), mount spawn rate.
-4. **Known rough edges:** all fixed. Holding through a jump reaches an eagle; only a jump grabs one (a tall stack riding underneath doesn't); quitting a run (restart, main menu, closing the tab) banks its coins and goal progress; the portrait game-over card fits short phones down to 360×480.
+4. **Phase 4: Levels 1–10**, then **Phase 5: Zones**. Spec: [`levels.md`](levels.md).
+5. **Known rough edges:** all fixed. Holding through a jump reaches an eagle; only a jump grabs one (a tall stack riding underneath doesn't); quitting a run (restart, main menu, closing the tab) banks its coins and goal progress; the portrait game-over card fits short phones down to 360×480.
 
 Decided 2026-10-02: coins ship in Phase 1 (cluster speed bonus, lifetime
 wallet for the Phase 3 shop); the tough mount is a **polar bear**.
@@ -93,6 +94,36 @@ yeti, the yeti dropped out of the mount list.
 | Coin shop with gameplay upgrades | ✅ | Seven upgrades, 7,060 coins for everything (about 45 coins a run): head start (snowmobile, then + polar bear), coin magnet, cluster boost, avalanche delay, eagle wings, bigger tank, sturdy landings. Applied as tuning overrides and start mounts; never to the title-screen demo run. `?coins=` and `?profile=reset` for testing. |
 | Second biome | ✅ | **Twilight Pines** (`src/biomes.ts`): dusk palette, moon, stars, aurora, denser pines, glowing cabin windows, fewer rocks, 3× cabins, longer ice. Biomes are data: palette overrides, backdrop options, a terrain mix and a spawn table. Picked on the title screen (‹ ›), remembered in `yeti-set-go.biome`, locked until rank 3, `?biome=` to force. |
 | More biomes | ✅ | Each favours its own terrain. **Blossom Ridge** (rank 4): spring pinks, blossom pines, petals; whoops, rollers and kickers, more coins, fewer rocks. **Glacier Gorge** (rank 6): blue ice; gaps, chutes and bowls, 2× ice and longer sheets. **Ember Peak** (rank 8): a volcano at sunset, ash snow, charred pines, embers; steps, drops and booters, 1.6× rocks. Avalanche survival and coins a run, probe means (4 bots × 5 seeds): Sunny Slopes 61 s / 52 (was 62 s / 45 before the new terrain), Twilight 70 s / 61, Blossom 64 s / 60, Glacier 72 s / 52, Ember 66 s / 58. |
+
+---
+
+## Phase 4 — Levels 1–10 🟡
+
+Spec: [`levels.md`](levels.md). Ranks become ten hand-made levels with a
+finale, then an endless Legend mode. The biomes at ranks 4, 6 and 8 are the
+rewards for those levels.
+
+| Feature | Status | Notes |
+|---|---|---|
+| Rank → level, fixed goal table, save migration | ✅ | `LEVELS` in `src/sim/meta.ts`, read through `goalsFor()`; past level 10 goals are drawn at random as before. The table is the source of truth for levels 1–10: on load a save gets its level's table goals, keeping progress on matching ids. `PROFILE_VERSION` 2 reads v1's `rank`. `survive` targets lowered to 40–90 s for the faster avalanche. |
+| Level path, finale card, Legend label, level-up coins | ⬜ | 10 pips on the Goals card; "Yeti Legend!" after level 10; +50 × level coins. |
+| Biome goals: ski N m on each newly unlocked biome | ✅ | `twilightMetres`, `blossomMetres`, `glacierMetres`, `emberMetres` (family `distance`); `RunProgress.biome`; random draws only offer unlocked biomes. |
+| New perks: second wind (9), hot start (10) | ⬜ | A one-time avalanche knock-back; a `Score` multiplier floor of ×2. |
+| Skip a goal for coins | ⬜ | 50 × level; the pressure valve for fixed goals. |
+| Golden fur in Legend | ⬜ | Yeti palette overrides. |
+
+---
+
+## Phase 5 — Zones ⬜
+
+Spec: [`levels.md`](levels.md#phase-5-zones-milestones-within-a-run). Milestones inside a run.
+
+| Feature | Status | Notes |
+|---|---|---|
+| Zone every 500 m: event, +250 × zone bonus, best zone saved | ⬜ | `src/sim/run.ts`. |
+| Gate on the slope, HUD toast, chime | ⬜ | `src/render/zoneGateView.ts`; reuses the goal toast. |
+| Difficulty keeps rising past 1,500 m | ⬜ | +10% `obstacleDensity` per zone from zone 4, capped at ×1.5. Probe it. |
+| Scenery that changes by zone | ⬜ | Later: needs mid-run palette changes. |
 
 ---
 
