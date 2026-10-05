@@ -15,11 +15,12 @@ Portfolio / learning project. Not affiliated with the original.
 | ![A polar bear smashing a rock](docs/screenshots/polar-bear.png) | ![The Twilight Pines biome, avalanche close behind](docs/screenshots/twilight.png) |
 | A polar bear smashes straight through rocks | Twilight Pines, with the avalanche close behind |
 
-**Status: Phases 1–3 built and deployed (real-phone test pending).** Endless
+**Status: Phases 1–5 built (real-phone test pending).** Endless
 procedural slope, jump, hold-to-backflip, landing judgement, crash and
 recover, an avalanche chasing you, rocks, cabins with rideable roofs, ice
 patches, coin clusters, mounts (penguin, eagle, snowmobile, polar bear), score
-with a trick multiplier, goals and ranks, a coin shop, five biomes (Sunny
+with a trick multiplier, ten levels of goals and an endless Legend mode,
+zones every 500 m, a coin shop, five biomes (Sunny
 Slopes, Twilight Pines, Blossom Ridge, Glacier Gorge and Ember Peak), each
 with its own mix of terrain, synthesised sound and music, and title / pause /
 game-over screens. See [`docs/research.md`](docs/research.md) for the plan and
@@ -44,7 +45,7 @@ Handy URL parameters (on `/play/`):
 | `?mount=penguin` | Start every run riding a mount (`penguin`, `eagle`, `snowmobile`, `bear`) |
 | `?biome=twilight` | Force a biome (`alpine`, `twilight`, `blossom`, `glacier`, `ember`), even a locked one |
 | `?coins=5000` | Top the wallet up to at least this many coins (for testing the shop) |
-| `?profile=reset` | Wipe saved progress: coins, rank, goals, upgrades |
+| `?profile=reset` | Wipe saved progress: coins, level, goals, upgrades |
 
 ## Controls
 
@@ -67,6 +68,9 @@ lets it catch up. Jump rocks, ride over cabin roofs (hit the wall and you
 wipe out), and use ice patches to pick up speed. Grab every coin in a cluster
 for a speed boost; coins are saved across runs for the shop.
 
+Every 500 m is a new **zone**: ski through the gate for a bonus (100 points
+× the zone number). Past zone 3 the obstacles get denser with every zone.
+
 The mountain is built from shaped pieces: rollers, kickers, cliff drops,
 bowls, big booters, steep **chutes** that plunge at 45° and more, **steps**
 (a staircase of ledges), **whoops** (quick bumps to skip across) and
@@ -83,13 +87,23 @@ is a shield: a hit knocks it off instead of wiping you out.
 Score is 1 point per metre plus trick points. A clean flip
 scores 100 (2 flips 300, 3 flips 600) and raises the multiplier by the
 number of flips, up to ×10. A sloppy landing or a crash resets it to ×1.
+Zone bonuses come on top.
 
 You always have three **goals** (Goals on the title screen). Finish all three
-to rank up: each rank multiplies your whole score by another ×0.25, and some
-ranks unlock perks: rank 2 starts every run on a penguin, rank 3 unlocks the
-Twilight Pines biome, rank 4 Blossom Ridge, rank 5 brings mounts more often,
-rank 6 unlocks Glacier Gorge, rank 7 shortens wipeouts, and rank 8 unlocks
-Ember Peak. Spend coins in the **Shop** on upgrades: head start, coin magnet,
+to reach the next level, plus 50 coins a level. Levels 1–10 each have their
+own three goals, teaching one new thing at a time; level 10 is the finale.
+Finish it and you're a **Yeti Legend**: golden fur, and endless Legend levels
+with random goals. Each level multiplies your whole score by another ×0.25,
+and most unlock something: level 2 starts every run on a penguin, level 3
+unlocks the Twilight Pines biome, level 4 Blossom Ridge, level 5 brings
+mounts more often, level 6 unlocks Glacier Gorge, level 7 shortens wipeouts,
+level 8 unlocks Ember Peak, level 9 gives a **second wind** (once a run the
+avalanche gets knocked back instead of catching you), and level 10 a **hot
+start** (the trick multiplier never drops below ×2). The Goals card shows the
+path; tap a level to see what it gives. Stuck on a goal? Skip it for 50 coins
+× your level.
+
+Spend coins in the **Shop** on upgrades: head start, coin magnet,
 cluster boost, avalanche delay, eagle wings, bigger tank, sturdy landings.
 
 ## Tuning the feel
@@ -112,12 +126,12 @@ src/
     mounts.ts     The mount stack, shields, eagle flight, fuel, and per-mount feel
     run.ts        One run: fixed 120 Hz step, avalanche, stats
     score.ts      Trick points and the multiplier
-    meta.ts       Goals, ranks, perks and shop upgrades (pure rules)
+    meta.ts       Goals, levels, perks and shop upgrades (pure rules)
     rng.ts        Seeded PRNG
-  render/       Phaser views of the sim (terrain chunks, yeti, mounts, obstacles, avalanche, sky, particles)
+  render/       Phaser views of the sim (terrain chunks, yeti, mounts, obstacles, zone gates, avalanche, sky, particles)
   ui/           HUD, DOM menus (title / pause / game over) and the tuning panel
   audio.ts      Every sound and the music loop, synthesised with WebAudio (no audio files)
-  profile.ts    Saved progress (coins, rank, goals, upgrades) in localStorage
+  profile.ts    Saved progress (coins, level, goals, upgrades) in localStorage
   biomes.ts     Biome palettes, backdrops, terrain mixes and spawn tables
   scenes/       PlayScene wires input → sim → views, three cameras
   tuning.ts     Every feel number in one place

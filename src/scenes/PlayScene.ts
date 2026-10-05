@@ -12,9 +12,11 @@ import { SnowSpray, Snowfall } from '../render/effects';
 import { AvalancheView } from '../render/avalancheView';
 import { ObstacleView } from '../render/obstacleView';
 import { MountView } from '../render/mountView';
+import { ZoneGateView } from '../render/zoneGateView';
+import { ZONE_METRES } from '../sim/spawner';
 import { MOUNT_NAMES, type MountKind } from '../sim/mounts';
 import { palette } from '../render/palette';
-import { applyBiome } from '../biomes';
+import { applyBiome, currentBiome } from '../biomes';
 import { Hud } from '../ui/hud';
 import type { Tuner } from '../ui/tuner';
 import { loadBest, saveBest, type Menu } from '../ui/menu';
@@ -95,6 +97,7 @@ export class PlayScene extends Phaser.Scene {
   private avalancheView!: AvalancheView;
   private obstacleView!: ObstacleView;
   private mountView!: MountView;
+  private zoneView!: ZoneGateView;
 
   // Per-run state (reset in create(): the scene instance is reused on restart).
   private state: State = 'menu';
@@ -132,6 +135,8 @@ export class PlayScene extends Phaser.Scene {
       table: biome.spawns,
       terrain: biome.terrain,
       scoreMultiplier: setup.scoreMultiplier,
+      multiplierFloor: setup.multiplierFloor,
+      secondWind: setup.secondWind,
     });
     this.goals = play ? new RunGoals(profile, () => new Rng(randomSeed())) : null;
     this.final = null;
@@ -167,6 +172,7 @@ export class PlayScene extends Phaser.Scene {
     this.background = new Background(this, bgLayer);
     this.terrainView = new TerrainView(this, terrainLayer, this.run.terrain);
     this.spray = new SnowSpray(this, actorLayer);
+    this.zoneView = new ZoneGateView(this, propLayer, this.run.terrain, this.run.startX);
     this.obstacleView = new ObstacleView(this, propLayer, this.run.spawner, this.run.terrain);
     this.mountView = new MountView(this, propLayer, actorLayer, this.run.spawner);
     // Depths in the actor layer: spray, the stack under the yeti, the yeti, an eagle carrying it.
@@ -200,7 +206,7 @@ export class PlayScene extends Phaser.Scene {
     this.ctx.sfx.setPaused(true);
     const r = this.progress();
     this.ctx.menu.showPause(
-      getProfile().rank,
+      getProfile().level,
       (this.goals?.profile.goals ?? []).map((g) => ({
         text: goalText(g),
         progress: goalProgressText({ ...g, progress: goalValue(g, r) }),
@@ -318,6 +324,7 @@ export class PlayScene extends Phaser.Scene {
 
     const halfW = width / zoom / 2;
     this.terrainView.update(this.view.x - halfW, this.view.x + halfW);
+    this.zoneView.update(this.view.x - halfW, this.view.x + halfW);
     this.obstacleView.update(this.view.x - halfW, this.view.x + halfW, dt);
     const mounts = this.run.mounts;
     const held = this.state === 'playing' && (this.keyHeld || this.pointersDown.size > 0);
@@ -361,8 +368,8 @@ export class PlayScene extends Phaser.Scene {
         stack: [...mounts.stack, ...(mounts.state === 'carried' ? (['eagle'] as const) : [])].map((k) => MOUNT_NAMES[k]),
         eagle: mounts.state === 'carried' ? mounts.eagleTime / this.run.tuning.eagleTime : null,
         fuel: mounts.stack[0] === 'snowmobile' ? mounts.fuel / this.run.tuning.snowmobileFuel : null,
-        rank: getProfile().rank,
-        rankMultiplier: this.run.scoreMultiplier,
+        level: getProfile().level,
+        levelMultiplier: this.run.scoreMultiplier,
       },
       dt,
     );
@@ -382,7 +389,7 @@ export class PlayScene extends Phaser.Scene {
   }
 
   private progress(): RunProgress {
-    return { stats: this.run.stats, metres: this.run.distancePx() / PX_PER_METRE, score: this.run.score, seconds: this.run.time };
+    return { stats: this.run.stats, metres: this.run.distancePx() / PX_PER_METRE, score: this.run.score, seconds: this.run.time, biome: currentBiome().id };
   }
 
   /** Goals met mid-run: a toast and a chime, saved straight away. */
@@ -391,7 +398,7 @@ export class PlayScene extends Phaser.Scene {
     const done = this.goals.check(this.progress());
     for (const g of done) {
       const all = this.goals.profile.goals.every((x) => x.done);
-      this.hud.toast(all ? 'All 3 goals done! Rank up at the finish' : 'Goal complete!', goalText(g));
+      this.hud.toast(all ? 'All 3 goals done! Level up at the finish' : 'Goal complete!', goalText(g));
       this.ctx.sfx.goal();
     }
     if (done.length) persist();
@@ -415,10 +422,10 @@ export class PlayScene extends Phaser.Scene {
     const newBest = score > this.best;
     if (newBest) saveBest(score);
     const st = this.run.stats;
-    const rank = getProfile().rank;
+    const level = getProfile().level;
     const summary = this.goals!.finish(this.final ?? this.progress());
     persist();
-    if (summary.rankUp) this.ctx.sfx.rankUp();
+    if (summary.levelUp) this.ctx.sfx.levelUp();
     this.hud.setVisible(false);
     this.ctx.menu.showGameOver({
       score,
@@ -430,13 +437,16 @@ export class PlayScene extends Phaser.Scene {
       best: Math.max(score, this.best),
       newBest,
       rides: rideSummary(st),
-      rank,
-      rankMultiplier: this.run.scoreMultiplier,
+      zone: st.zone,
+      level,
+      levelMultiplier: this.run.scoreMultiplier,
       goals: summary.goals.map((g) => ({ text: goalText(g), progress: goalProgressText(g), done: g.done, fresh: g.fresh })),
-      rankUp: summary.rankUp && {
-        rank: summary.rankUp.rank,
-        multiplier: summary.rankUp.multiplier,
-        unlocks: summary.rankUp.perks.map(({ name, text }) => ({ name, text })),
+      levelUp: summary.levelUp && {
+        level: summary.levelUp.level,
+        multiplier: summary.levelUp.multiplier,
+        coins: summary.levelUp.coins,
+        finale: summary.levelUp.finale,
+        unlocks: summary.levelUp.perks.map(({ name, text }) => ({ name, text })),
       },
     });
   }
@@ -580,6 +590,14 @@ export class PlayScene extends Phaser.Scene {
         } else if (e.reason === 'release') {
           sfx?.flap();
         }
+      } else if (e.type === 'zone') {
+        if (sfx) this.hud.toast(`Zone ${e.zone}!`, `${((e.zone - 1) * ZONE_METRES).toLocaleString('en-US')} m · +${e.points} points`);
+        sfx?.zone();
+      } else if (e.type === 'secondWind') {
+        this.hud.toast('Second wind!', 'The avalanche fell back 30 m');
+        this.spray.burst(e.x, e.y, 40);
+        this.shake(400, 0.01);
+        sfx?.secondWind();
       } else if (e.type === 'smash') {
         const [sx, sy] = toScreen(e.x, e.y);
         if (sfx) this.hud.popup('Smash!', sx, sy - 200 * u, palette.bearFur, 40);

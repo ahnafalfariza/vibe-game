@@ -15,6 +15,11 @@ if (!url) {
   server = spawn('bunx', ['vite', 'preview', '--port', port, '--strictPort'], { stdio: 'ignore' });
   url = `http://localhost:${port}/play/?seed=7`;
   await new Promise((r) => setTimeout(r, 2500));
+  // --strictPort exits if the port is taken; don't go on to test whatever holds it.
+  if (server.exitCode !== null) {
+    console.error(`vite preview exited (code ${server.exitCode}): is port ${port} already in use? Free it or set PORT.`);
+    process.exit(1);
+  }
 }
 
 const executablePath = ['/opt/pw-browsers/chromium', process.env.CHROMIUM_PATH].find((p) => p && existsSync(p));
@@ -57,7 +62,7 @@ try {
     await page.waitForTimeout(1000);
     await page.screenshot({ path: `${outDir}/${name}-0-title.png` });
     // Biome picker: the demo run behind the title switches right away. Twilight Pines is
-    // locked until rank 3, so on a fresh profile it's only a preview: not remembered, not playable.
+    // locked until level 3, so on a fresh profile it's only a preview: not remembered, not playable.
     await page.click('#overlay [data-act="biome-next"]');
     await page.waitForTimeout(800);
     const picked = await page.evaluate(() => ({

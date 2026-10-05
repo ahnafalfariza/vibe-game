@@ -6,13 +6,18 @@
 import { BIOMES, isBiomeUnlocked } from '../biomes';
 import { getProfile, persist } from '../profile';
 import {
+  LEVELS,
+  PERKS,
   UPGRADES,
   buyUpgrade,
   goalProgressText,
   goalText,
   isTotalGoal,
+  levelName,
   nextPerk,
-  rankMultiplier,
+  skipCost,
+  skipGoal,
+  levelMultiplier,
   upgradeCost,
   upgradeLevel,
   type UpgradeId,
@@ -48,6 +53,8 @@ export interface GoalLine {
   done: boolean;
   /** Completed during this run. */
   fresh: boolean;
+  /** Goals panel only: what skipping it costs, and whether the wallet covers it. */
+  skip?: { cost: number; afford: boolean };
 }
 
 export interface RunResult {
@@ -62,11 +69,13 @@ export interface RunResult {
   newBest: boolean;
   /** "Rode 2 penguins · 3 smashes" ('' for none). */
   rides: string;
-  /** The rank (and its score multiplier) the run was played at. */
-  rank: number;
-  rankMultiplier: number;
+  /** Furthest zone reached. */
+  zone: number;
+  /** The level (and its score multiplier) the run was played at. */
+  level: number;
+  levelMultiplier: number;
   goals: GoalLine[];
-  rankUp: { rank: number; multiplier: number; unlocks: { name: string; text: string }[] } | null;
+  levelUp: { level: number; multiplier: number; coins: number; finale: boolean; unlocks: { name: string; text: string }[] } | null;
 }
 
 /** Ignore Space/Enter this long after the game-over screen appears, so a held jump doesn't skip it, ms. */
@@ -78,13 +87,36 @@ const COIN = '<i class="coin" aria-hidden="true"></i>';
 function goalList(goals: GoalLine[]): string {
   return goals
     .map(
-      (g) => `<li class="goal${g.done ? ' done' : ''}${g.fresh ? ' fresh' : ''}">
+      (g, i) => `<li class="goal${g.done ? ' done' : ''}${g.fresh ? ' fresh' : ''}">
         <span class="tick" aria-hidden="true"></span>
         <span class="goal-text">${g.done ? '<span class="sr-only">Done: </span>' : ''}${g.text}</span>
-        <span class="goal-count">${g.done ? (g.fresh ? 'New!' : 'Done') : g.progress}</span>
+        <span class="goal-side"><span class="goal-count">${g.done ? (g.fresh ? 'New!' : 'Done') : g.progress}</span>${
+          g.skip && !g.done
+            ? `<button class="btn small skip" data-act="skip" data-index="${i}"${g.skip.afford ? '' : ' disabled'} aria-label="Skip this goal for ${fmt(g.skip.cost)} coins">Skip ${fmt(g.skip.cost)} ${COIN}</button>`
+            : ''
+        }</span>
       </li>`,
     )
     .join('');
+}
+
+/** Pips for levels 1–10 and Legend: done, current, and which ones unlock something. */
+function levelPath(level: number): string {
+  const pip = (n: number, label: string) => {
+    // The Legend pip stays current for every Legend level.
+    const state = n > LEVELS.length ? (level >= n ? 'current' : '') : n < level ? 'done' : n === level ? 'current' : '';
+    const perk = PERKS.some((k) => k.level === n);
+    return `<li><button class="pip ${state}${perk ? ' perk' : ''}" data-act="pip" data-level="${n}" aria-label="${levelName(n)}${state === 'done' ? ', done' : state === 'current' ? ', you are here' : ''}">${label}</button></li>`;
+  };
+  return LEVELS.map((_, i) => pip(i + 1, String(i + 1))).join('') + pip(LEVELS.length + 1, '★');
+}
+
+/** What reaching `level` gives you, for the level path. */
+function levelReward(level: number): string {
+  const perks = PERKS.filter((k) => k.level === level).map((k) => `${k.name} (${k.text.toLowerCase()})`);
+  if (level > LEVELS.length) return `Yeti Legend: random goals from here on${perks.length ? `, plus ${perks.join(', ')}` : ''}`;
+  const finale = level === LEVELS.length ? 'The finale' : '';
+  return `${levelName(level)}: ` + ([finale, ...perks].filter(Boolean).join(', plus ') || (level === 1 ? 'where it all starts' : 'three new goals'));
 }
 
 export class Menu {
@@ -153,9 +185,10 @@ export class Menu {
             </div>
           </div>
           <div class="card over-goals">
-            <div class="rankup" hidden>
-              <p class="rankup-title">Rank up!</p>
-              <p class="rankup-text"></p>
+            <div class="levelup" hidden>
+              <p class="levelup-title">Level up!</p>
+              <p class="levelup-text"></p>
+              <p class="levelup-coins"></p>
               <ul class="unlocks"></ul>
             </div>
             <p class="card-head"></p>
@@ -167,6 +200,7 @@ export class Menu {
         <h2 id="goals-heading">Goals</h2>
         <div class="card">
           <p class="card-head"></p>
+          <ol class="level-path" aria-label="Levels"></ol>
           <ul class="goal-list"></ul>
           <p class="card-foot"></p>
         </div>
@@ -200,7 +234,9 @@ export class Menu {
       const act = el?.dataset.act;
       if (!act) return;
       if (act === 'buy') return this.buy(el!.dataset.id as UpgradeId);
+      if (act === 'skip') return this.skip(Number(el!.dataset.index));
       this.actions.click();
+      if (act === 'pip') this.screens.goals.querySelector('.card-foot')!.textContent = levelReward(Number(el!.dataset.level));
       if (act === 'mute') this.setMuted(this.actions.toggleMute());
       else if (act === 'music') this.setMusic(this.actions.toggleMusic());
       else if (act === 'biome-prev' || act === 'biome-next') this.stepBiome(act === 'biome-next' ? 1 : -1);
@@ -260,26 +296,29 @@ export class Menu {
     el.querySelector<HTMLButtonElement>('[data-act="play"]')!.disabled = locked;
   }
 
-  /** The Goals / Shop buttons' little tags: rank and goals done, coins. */
+  /** The Goals / Shop buttons' little tags: level and goals done, coins. */
   private renderTitleMeta(): void {
     const p = getProfile();
     const el = this.screens.title;
-    el.querySelector('.goals-tag')!.textContent = `Rank ${p.rank} · ${p.goals.filter((g) => g.done).length}/${p.goals.length}`;
+    el.querySelector('.goals-tag')!.textContent = `${levelName(p.level)} · ${p.goals.filter((g) => g.done).length}/${p.goals.length}`;
     el.querySelector('.coins-tag')!.textContent = fmt(p.coins);
   }
 
   private renderGoals(): void {
     const p = getProfile();
     const el = this.screens.goals;
-    el.querySelector('.card-head')!.textContent = `Rank ${p.rank} · score ×${rankMultiplier(p.rank)}`;
+    el.querySelector('.card-head')!.textContent = `${levelName(p.level)}${p.level === LEVELS.length ? ' · the finale' : ''} · score ×${levelMultiplier(p.level)}`;
+    el.querySelector('.level-path')!.innerHTML = levelPath(p.level);
+    const skip = { cost: skipCost(p.level), afford: p.coins >= skipCost(p.level) };
     el.querySelector('.goal-list')!.innerHTML = goalList(
-      p.goals.map((g) => ({ text: goalText(g), progress: (isTotalGoal(g) ? '' : 'Best ') + goalProgressText(g), done: g.done, fresh: false })),
+      p.goals.map((g) => ({ text: goalText(g), progress: (isTotalGoal(g) ? '' : 'Best ') + goalProgressText(g), done: g.done, fresh: false, skip })),
     );
-    const perk = nextPerk(p.rank);
+    const perk = nextPerk(p.level);
     const all = p.goals.every((g) => g.done);
+    const next = p.level === LEVELS.length ? 'become a Yeti Legend' : `reach ${levelName(p.level + 1)}`;
     el.querySelector('.card-foot')!.textContent = all
-      ? 'All done! Finish a run to rank up.'
-      : `Finish all three to reach rank ${p.rank + 1} (score ×${rankMultiplier(p.rank + 1)})` + (perk ? ` · Rank ${perk.rank}: ${perk.name}` : '');
+      ? 'All done! Finish a run to level up.'
+      : `Finish all three to ${next} (score ×${levelMultiplier(p.level + 1)})` + (perk ? ` · ${levelName(perk.level)}: ${perk.name}` : '');
   }
 
   private renderShop(): void {
@@ -313,6 +352,16 @@ export class Menu {
     }
   }
 
+  /** Pay to count a goal as done. */
+  private skip(index: number): void {
+    if (skipGoal(getProfile(), index)) {
+      persist();
+      this.actions.purchase();
+    }
+    this.renderGoals();
+    this.screens.goals.querySelector<HTMLElement>('.skip:not(:disabled), [data-act="close"]')?.focus();
+  }
+
   private openPanel(panel: Panel): void {
     this.opener = document.activeElement as HTMLElement | null;
     if (panel === 'goals') this.renderGoals();
@@ -337,7 +386,8 @@ export class Menu {
   }
 
   showTitle(best: number): void {
-    this.screens.title.querySelector('.best')!.textContent = best > 0 ? `Best ${fmt(best)}` : '';
+    const zone = getProfile().bestZone;
+    this.screens.title.querySelector('.best')!.textContent = best > 0 ? `Best ${fmt(best)}` + (zone > 1 ? ` · furthest zone ${zone}` : '') : '';
     this.renderBiome();
     this.renderTitleMeta();
     // An open panel stays open while the demo run behind it restarts.
@@ -346,9 +396,9 @@ export class Menu {
   }
 
   /** `goals` with this run counted so far. */
-  showPause(rank: number, goals: GoalLine[]): void {
+  showPause(level: number, goals: GoalLine[]): void {
     const el = this.screens.pause;
-    el.querySelector('.card-head')!.textContent = `Goals · Rank ${rank}`;
+    el.querySelector('.card-head')!.textContent = `Goals · ${levelName(level)}`;
     el.querySelector('.goal-list')!.innerHTML = goalList(goals);
     this.show('pause');
   }
@@ -357,19 +407,25 @@ export class Menu {
     const el = this.screens.over;
     el.querySelector('.score')!.textContent = fmt(r.score);
     (el.querySelector('.new-best') as HTMLElement).hidden = !r.newBest;
-    el.querySelector('.stats')!.textContent = `${fmt(r.metres)} m · ${r.flips} flips · best air ${r.bestAir.toFixed(1)}s`;
+    el.querySelector('.stats')!.textContent = `${fmt(r.metres)} m · zone ${r.zone} · ${r.flips} flips · best air ${r.bestAir.toFixed(1)}s`;
     const rides = el.querySelector<HTMLElement>('.rides')!;
     rides.textContent = r.rides;
     rides.hidden = r.rides === '';
     el.querySelector('.coins-line')!.innerHTML = `${COIN}+${fmt(r.coins)} coins · ${fmt(r.wallet)} total`;
     el.querySelector('.best')!.textContent = r.newBest ? '' : `Best ${fmt(r.best)}`;
-    el.querySelector('.card-head')!.textContent = `Goals · Rank ${r.rank}` + (r.rankMultiplier > 1 ? ` · score ×${r.rankMultiplier}` : '');
+    el.querySelector('.card-head')!.textContent = `Goals · ${levelName(r.level)}` + (r.levelMultiplier > 1 ? ` · score ×${r.levelMultiplier}` : '');
     el.querySelector('.goal-list')!.innerHTML = goalList(r.goals);
-    const up = el.querySelector<HTMLElement>('.rankup')!;
-    up.hidden = r.rankUp === null;
-    if (r.rankUp) {
-      up.querySelector('.rankup-text')!.textContent = `Rank ${r.rankUp.rank} · score ×${r.rankUp.multiplier} from now on`;
-      up.querySelector('.unlocks')!.innerHTML = r.rankUp.unlocks.map((u) => `<li><b>Unlocked: ${u.name}</b><span>${u.text}</span></li>`).join('');
+    const up = el.querySelector<HTMLElement>('.levelup')!;
+    up.hidden = r.levelUp === null;
+    if (r.levelUp) {
+      const { level, multiplier, coins, finale } = r.levelUp;
+      up.classList.toggle('finale', finale);
+      up.querySelector('.levelup-title')!.textContent = finale ? 'Yeti Legend!' : 'Level up!';
+      up.querySelector('.levelup-text')!.textContent = finale
+        ? `All ${LEVELS.length} levels done · score ×${multiplier} from now on`
+        : `${levelName(level)} · score ×${multiplier} from now on`;
+      up.querySelector('.levelup-coins')!.innerHTML = `${COIN}+${fmt(coins)} coins`;
+      up.querySelector('.unlocks')!.innerHTML = r.levelUp.unlocks.map((u) => `<li><b>Unlocked: ${u.name}</b><span>${u.text}</span></li>`).join('');
     }
     this.show('over');
   }

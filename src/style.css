@@ -372,6 +372,29 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* Progress, and on the Goals panel a skip button under it. */
+.goal-side {
+  display: grid;
+  justify-items: end;
+  gap: 4px;
+}
+
+.btn.skip {
+  padding: 0.15em 0.7em;
+  border-width: 2px;
+  font-size: clamp(12px, 2.1vmin, 15px);
+  white-space: nowrap;
+  box-shadow: 0 2px 0 var(--ink);
+}
+
+.btn.skip:not(:disabled) {
+  background: var(--yellow);
+}
+
+.btn.skip:disabled .coin {
+  opacity: 0.6;
+}
+
 .goal.fresh {
   background: #fff1bf;
   animation: pop-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) 0.2s backwards;
@@ -383,6 +406,63 @@ body {
 
 .goal.fresh .goal-count {
   color: var(--orange-dark);
+}
+
+/* Level path on the Goals card: levels 1–10, then Legend. */
+.level-path {
+  display: grid;
+  grid-template-columns: repeat(11, minmax(0, 1fr));
+  gap: 4px;
+  margin: 8px 0 2px;
+  padding: 0;
+  list-style: none;
+}
+
+.pip {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  max-width: 34px;
+  aspect-ratio: 1;
+  margin: 0 auto;
+  padding: 0;
+  border: 2.5px solid var(--ink);
+  border-radius: 50%;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  font-size: clamp(11px, 2.2vmin, 15px);
+  cursor: pointer;
+}
+
+.pip.done {
+  background: #5fd38d;
+}
+
+.pip.current {
+  background: var(--orange);
+  color: #fff;
+  box-shadow: 0 0 0 3px var(--yellow);
+}
+
+/* A level that unlocks something wears a gold dot. */
+.pip.perk::after {
+  content: '';
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 9px;
+  height: 9px;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  background: var(--yellow);
+}
+
+.pip:focus-visible {
+  outline: 3px solid var(--ink);
+  outline-offset: 2px;
 }
 
 /* Goals and Shop panels */
@@ -503,7 +583,7 @@ body {
 }
 
 /* Short portrait phones: vmin is the width there, so size by height too, or a
-   rank-up card runs past the bottom (fits down to 360x480). */
+   level-up card runs past the bottom (fits down to 360x480). */
 @media (orientation: portrait) and (max-height: 700px) {
   .over {
     gap: 4px;
@@ -534,7 +614,7 @@ body {
   }
 }
 
-.rankup {
+.levelup {
   margin: -2px -6px 8px;
   padding: 6px 10px 8px;
   border-radius: 12px;
@@ -544,16 +624,25 @@ body {
   animation: pop-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.3s backwards;
 }
 
-.screen .rankup p {
+.screen .levelup p {
   text-shadow: 0 2px 0 var(--orange-dark);
 }
 
-.screen .rankup-title {
+.screen .levelup-title {
   font-weight: 600;
   font-size: clamp(22px, 4.6vmin, 32px);
   line-height: 1.1;
   color: #fff;
   animation: pulse 0.8s ease-in-out infinite alternate;
+}
+
+.screen .levelup-coins {
+  font-weight: 600;
+}
+
+/* Finishing level 10. */
+.levelup.finale {
+  background: linear-gradient(135deg, #f5b81c, var(--orange));
 }
 
 .unlocks {
@@ -582,8 +671,8 @@ body {
   .screen,
   .screen .new-best,
   .goal.fresh,
-  .rankup,
-  .screen .rankup-title {
+  .levelup,
+  .screen .levelup-title {
     animation: none;
   }
 }

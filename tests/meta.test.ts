@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   GOALS,
+  LEVELS,
   PERKS,
   RunGoals,
   UPGRADES,
@@ -9,11 +10,16 @@ import {
   canMeet,
   drawGoals,
   goalText,
+  goalsFor,
+  levelName,
+  levelUpCoins,
   newProfile,
   normalizeProfile,
-  rankMultiplier,
+  levelMultiplier,
   rideSummary,
   runSetup,
+  skipCost,
+  skipGoal,
   tierFor,
   upgradeCost,
   type Goal,
@@ -22,8 +28,9 @@ import {
 } from '../src/sim/meta';
 import { Run, SIM_DT, type RunStats } from '../src/sim/run';
 import { Rng } from '../src/sim/rng';
+import { MOUNT_TABLE } from '../src/sim/spawner';
 import { OLD_WALLET_KEY, PROFILE_KEY, loadProfile, saveProfile, type Store } from '../src/profile';
-import { DEFAULT_TUNING, createTuning } from '../src/tuning';
+import { DEFAULT_TUNING, PX_PER_METRE, createTuning } from '../src/tuning';
 
 const def = (id: string) => GOALS.find((g) => g.id === id)!;
 
@@ -46,6 +53,7 @@ function stats(over: Partial<RunStats> = {}): RunStats {
     smashes: 0,
     eagleTime: 0,
     shieldsLost: 0,
+    zone: 1,
     ...over,
   };
 }
@@ -53,7 +61,7 @@ function stats(over: Partial<RunStats> = {}): RunStats {
 const progress = (over: Partial<RunStats> = {}, metres = 100): RunProgress => ({ stats: stats(over), metres, score: metres, seconds: 30 });
 
 /** A profile whose goals are exactly these (id, target). */
-function withGoals(...goals: [string, number][]): Profile {
+function withGoals(...goals: (readonly [string, number])[]): Profile {
   const p = newProfile();
   p.goals = goals.map(([id, target]): Goal => ({ id, target, progress: 0, done: false }));
   return p;
@@ -150,7 +158,7 @@ describe('Goals', () => {
     expect(drawGoals(5, 5000, new Rng(1))).not.toEqual(drawGoals(5, 5000, new Rng(2)));
   });
 
-  it('scales difficulty with rank', () => {
+  it('scales difficulty with level', () => {
     expect([1, 2, 3, 4, 5, 9, 40].map((r) => tierFor(r))).toEqual([0, 0, 1, 1, 2, 4, 4]);
     const easy = withGoals(['flips', def('flips').targets[tierFor(1)]]).goals[0].target;
     const hard = drawGoals(9, 0, new Rng(1)).map((g) => g.target / def(g.id).targets[0]);
@@ -176,61 +184,179 @@ describe('Goals', () => {
   });
 });
 
-describe('Ranks', () => {
-  it('rank up when all three goals are done, with three fresh ones drawn', () => {
+describe('Levels', () => {
+  it('level up when all three goals are done, onto the next level\'s goals', () => {
     const p = withGoals(['flips', 3], ['coins', 25], ['distance', 600]);
     p.bestMetres = 5000;
     const run1 = new RunGoals(p, rng);
-    expect(run1.finish(progress({ flips: 3, coins: 30 })).rankUp).toBeNull();
-    expect(p.rank).toBe(1);
+    expect(run1.finish(progress({ flips: 3, coins: 30 })).levelUp).toBeNull();
+    expect(p.level).toBe(1);
     const old = p.goals.map((g) => g.id);
     const s = new RunGoals(p, rng).finish(progress({}, 700));
     expect(s.goals.every((g) => g.done)).toBe(true);
     expect(s.goals.map((g) => g.fresh)).toEqual([false, false, true]);
-    expect(s.rankUp).toMatchObject({ rank: 2, multiplier: 1.25 });
-    expect(s.rankUp!.perks.map((k) => k.name)).toEqual(['Penguin start']);
-    expect(p.rank).toBe(2);
-    expect(p.goals).toHaveLength(3);
-    expect(p.goals.some((g) => g.done)).toBe(false);
+    expect(s.levelUp).toMatchObject({ level: 2, multiplier: 1.25 });
+    expect(s.levelUp!.perks.map((k) => k.name)).toEqual(['Penguin start']);
+    expect(p.level).toBe(2);
+    expect(p.goals).toEqual(goalsFor(2, 0, rng()));
     expect(p.goals.filter((g) => old.includes(g.id))).toEqual([]);
   });
 
-  it('banks coins and the best distance at the end of a run', () => {
+  it('banks coins, the best distance and the furthest zone at the end of a run', () => {
     const p = newProfile(10);
-    const s = new RunGoals(p, rng).finish(progress({ coins: 33 }, 812));
-    expect([s.coins, s.wallet, p.coins, p.bestMetres]).toEqual([33, 43, 43, 812]);
+    const s = new RunGoals(p, rng).finish(progress({ coins: 33, zone: 2 }, 812));
+    expect([s.coins, s.wallet, p.coins, p.bestMetres, p.bestZone]).toEqual([33, 43, 43, 812, 2]);
+    new RunGoals(p, rng).finish(progress({ zone: 1 }, 100));
+    expect(p.bestZone).toBe(2);
   });
 
-  it('multiplies the whole score by the rank multiplier', () => {
-    expect([1, 2, 5, 9].map(rankMultiplier)).toEqual([1, 1.25, 2, 3]);
+  it('multiplies the whole score by the level multiplier', () => {
+    expect([1, 2, 5, 9].map(levelMultiplier)).toEqual([1, 1.25, 2, 3]);
     const p = newProfile();
-    p.rank = 3;
+    p.level = 3;
     expect(runSetup(p, DEFAULT_TUNING, false).scoreMultiplier).toBe(1.5);
     const tuning = createTuning({ obstacleDensity: 0, mountDensity: 0 });
     const plain = new Run(4, tuning, { avalanche: false });
-    const ranked = new Run(4, tuning, { avalanche: false, scoreMultiplier: 1.5 });
+    const levelled = new Run(4, tuning, { avalanche: false, scoreMultiplier: 1.5 });
     const idle = { held: false, pressed: false };
     for (let t = 0; t < 8; t += SIM_DT) {
       plain.step(idle, []);
-      ranked.step(idle, []);
+      levelled.step(idle, []);
     }
     expect(plain.score).toBeGreaterThan(100);
-    expect(ranked.score).toBe(Math.floor(plain.score * 1.5));
+    expect(levelled.score).toBe(Math.floor(plain.score * 1.5));
   });
 
-  it('unlocks Twilight Pines at rank 3, and perks by rank', () => {
+  it('unlocks Twilight Pines at level 3, and perks by level', () => {
     expect(biomeUnlocked('alpine', 1)).toBe(true);
     expect(biomeUnlocked('twilight', 2)).toBe(false);
     expect(biomeUnlocked('twilight', 3)).toBe(true);
-    expect(PERKS.find((k) => k.biome === 'twilight')?.rank).toBe(3);
+    expect(PERKS.find((k) => k.biome === 'twilight')?.level).toBe(3);
     const p = newProfile();
     expect(runSetup(p, DEFAULT_TUNING, false).startMount).toEqual([]);
-    p.rank = 2;
+    p.level = 2;
     expect(runSetup(p, DEFAULT_TUNING, false).startMount).toEqual(['penguin']);
-    p.rank = 7;
+    p.level = 7;
     const t = runSetup(p, DEFAULT_TUNING, false).tuning;
     expect(t.mountDensity).toBeGreaterThan(DEFAULT_TUNING.mountDensity);
     expect(t.crashDuration).toBeLessThan(DEFAULT_TUNING.crashDuration);
+  });
+});
+
+describe('Designed levels', () => {
+  const metresGoal = (id: string) => id === 'distance' || def(id).biome !== undefined;
+
+  it('has ten levels of three goals: real ids, different families, at most one total', () => {
+    expect(LEVELS).toHaveLength(10);
+    LEVELS.forEach((set, i) => {
+      const defs = set.map(([id]) => def(id));
+      expect(defs.every(Boolean), `level ${i + 1}`).toBe(true);
+      expect(new Set(defs.map((d) => d.family ?? d.id)).size, `level ${i + 1}`).toBe(3);
+      expect(defs.filter((d) => d.total).length, `level ${i + 1}`).toBeLessThanOrEqual(1);
+      for (const [id, target] of set) expect(def(id).text(target), id).not.toMatch(/undefined|NaN/);
+    });
+  });
+
+  it('brings a mount only after a level that skis past it, and each biome right after it unlocks', () => {
+    LEVELS.forEach((set, i) => {
+      const before = LEVELS.slice(0, i).flat().filter(([id]) => metresGoal(id));
+      const furthest = Math.max(0, ...before.map(([, target]) => target));
+      for (const [id] of set) {
+        const d = def(id);
+        if (d.mount) expect(furthest, `level ${i + 1} ${id}`).toBeGreaterThanOrEqual(MOUNT_TABLE[d.mount].from / PX_PER_METRE);
+        if (d.biome) expect([biomeUnlocked(d.biome, i), biomeUnlocked(d.biome, i + 1)], `level ${i + 1} ${id}`).toEqual([false, true]);
+      }
+    });
+    for (const perk of PERKS.filter((k) => k.biome)) expect(LEVELS[perk.level - 1].map(([id]) => id)).toContain(`${perk.biome}Metres`);
+  });
+
+  it('counts biome goals only on their biome', () => {
+    const m = (biome?: string) => def('twilightMetres').measure({ ...progress({}, 900), biome });
+    expect([m('twilight'), m('alpine'), m()]).toEqual([900, 0, 0]);
+    expect(goalText({ id: 'emberMetres', target: 1200, progress: 0, done: false })).toBe('Ski 1,200 m on Ember Peak in one run');
+  });
+
+  it('only draws biome goals for biomes the level has unlocked', () => {
+    const seen = new Set<string>();
+    for (let seed = 1; seed <= 300; seed++) for (const g of drawGoals(3, 5000, new Rng(seed))) if (def(g.id).biome) seen.add(def(g.id).biome!);
+    expect([...seen]).toEqual(['twilight']);
+  });
+
+  it('draws random goals at the top tier once level 10 is done', () => {
+    const p = withGoals(...LEVELS[9]);
+    p.level = 10;
+    p.bestMetres = 5000;
+    const s = new RunGoals(p, rng).finish(progress({ topMultiplier: 1, noCrashMetres: 1200 }, 2000));
+    expect(s.levelUp).toBeNull();
+    for (const g of p.goals) g.done = true;
+    const up = new RunGoals(p, rng).finish(progress()).levelUp;
+    expect(up).toMatchObject({ level: 11, multiplier: 3.5, coins: 500, finale: true });
+    expect(up!.perks.map((k) => k.name)).toEqual(['Golden fur']);
+    expect(p.goals).toHaveLength(3);
+    for (const g of p.goals) expect(g.target, g.id).toBe(def(g.id).targets[4]);
+    expect(p.goals).not.toEqual(goalsFor(10, 0, rng()));
+  });
+
+  it('gives second wind from level 9 and hot start from level 10', () => {
+    const p = newProfile();
+    const at = (level: number) => {
+      p.level = level;
+      const { secondWind, multiplierFloor } = runSetup(p, DEFAULT_TUNING, false);
+      return [secondWind, multiplierFloor];
+    };
+    expect([at(8), at(9), at(10), at(14)]).toEqual([[false, 1], [true, 1], [true, 2], [true, 2]]);
+  });
+
+  it('skips a goal for 50 coins a level, and the skip survives a reload', () => {
+    const p = normalizeProfile({ version: 2, coins: 250, level: 4 });
+    expect(skipCost(4)).toBe(200);
+    expect(skipGoal(p, 1)).toBe(true);
+    expect([p.coins, p.goals[1].done]).toEqual([50, true]);
+    expect(skipGoal(p, 1)).toBe(false); // already done
+    expect(skipGoal(p, 0)).toBe(false); // can't pay
+    expect(skipGoal(p, 7)).toBe(false);
+    expect(p.coins).toBe(50);
+    expect(normalizeProfile(JSON.parse(JSON.stringify(p))).goals[1].done).toBe(true);
+    // Skipping all three still levels up at the end of the next run.
+    p.coins = 1000;
+    skipGoal(p, 0);
+    skipGoal(p, 2);
+    expect(new RunGoals(p, rng).finish(progress()).levelUp).toMatchObject({ level: 5 });
+  });
+
+  it('pays coins for each level-up, and names the levels past 10 Legend', () => {
+    expect([2, 5, 10, 11, 30].map(levelUpCoins)).toEqual([100, 250, 500, 500, 500]);
+    expect([1, 10, 11, 13].map(levelName)).toEqual(['Level 1', 'Level 10', 'Legend 1', 'Legend 3']);
+    const p = withGoals(['flips', 3], ['coins', 25], ['distance', 600]);
+    p.coins = 7;
+    for (const g of p.goals) g.done = true;
+    const s = new RunGoals(p, rng).finish(progress({ coins: 20 }));
+    expect(s.levelUp).toMatchObject({ level: 2, coins: 100, finale: false });
+    expect([s.coins, s.wallet, p.coins]).toEqual([20, 127, 127]);
+  });
+
+  it('moves a rank-N save onto level N\'s goals, keeping progress where the goal matches', () => {
+    const p = normalizeProfile({
+      version: 1,
+      coins: 10,
+      rank: 4,
+      goals: [
+        { id: 'multiplier', target: 3, progress: 3, done: true }, // the target went up: not done any more
+        { id: 'eagleRides', target: 1, progress: 0, done: true }, // done mid-run before the quit banked it: still done
+        { id: 'air', target: 2, progress: 2.2, done: true }, // not on level 4: dropped
+      ],
+      upgrades: {},
+      bestMetres: 900,
+    });
+    expect([p.version, p.level, p.coins]).toEqual([2, 4, 10]);
+    expect(p.goals).toEqual([
+      { id: 'eagleRides', target: 1, progress: 0, done: true },
+      { id: 'multiplier', target: 4, progress: 3, done: false },
+      { id: 'blossomMetres', target: 1000, progress: 0, done: false },
+    ]);
+    // Past the designed levels a save keeps its own goals.
+    const legend = [{ id: 'air', target: 3.5, progress: 1, done: false }, { id: 'coins', target: 100, progress: 100, done: true }, { id: 'eagleTime', target: 15, progress: 0, done: false }];
+    expect(normalizeProfile({ version: 1, rank: 12, goals: legend }).goals).toEqual(legend);
   });
 });
 
@@ -269,8 +395,8 @@ describe('Shop', () => {
     expect(t.snowmobileFuel).toBe(DEFAULT_TUNING.snowmobileFuel + 8);
     expect(t.cleanLandingDeg).toBe(DEFAULT_TUNING.cleanLandingDeg + 3);
     expect(startMount).toEqual(['snowmobile']);
-    // With the rank-2 perk the penguin rides on the snowmobile; head start 2 brings a bear instead.
-    p.rank = 2;
+    // With the level-2 perk the penguin rides on the snowmobile; head start 2 brings a bear instead.
+    p.level = 2;
     expect(runSetup(p, DEFAULT_TUNING, false).startMount).toEqual(['snowmobile', 'penguin']);
     p.upgrades.headStart = 2;
     const setup = runSetup(p, DEFAULT_TUNING, false);
@@ -283,10 +409,10 @@ describe('Shop', () => {
 
   it('never boosts the title-screen demo run', () => {
     const p = newProfile(500);
-    p.rank = 9;
+    p.level = 9;
     p.upgrades = { magnet: 3, cluster: 3, avalanche: 3, eagle: 3, fuel: 3, landing: 3, headStart: 2 };
     const demo = runSetup(p, DEFAULT_TUNING, true);
-    expect(demo).toEqual({ tuning: { ...DEFAULT_TUNING }, startMount: [], scoreMultiplier: 1 });
+    expect(demo).toEqual({ tuning: { ...DEFAULT_TUNING }, startMount: [], scoreMultiplier: 1, multiplierFloor: 1, secondWind: false });
     expect(demo.tuning).not.toBe(DEFAULT_TUNING);
   });
 });
@@ -295,10 +421,11 @@ describe('Profile storage', () => {
   it('round-trips through storage', () => {
     const store = fakeStore();
     const p = newProfile(77);
-    p.rank = 4;
+    p.level = 4;
+    p.goals = goalsFor(4, 0, rng());
     p.upgrades = { landing: 2 };
-    p.goals[0].progress = 2;
-    p.goals[1].done = true;
+    p.goals[1].progress = 2;
+    p.goals[2].done = true;
     p.bestMetres = 1234.5;
     saveProfile(p, store);
     expect(loadProfile(store)).toEqual(p);
@@ -308,7 +435,7 @@ describe('Profile storage', () => {
     const store = fakeStore({ [OLD_WALLET_KEY]: '1234' });
     const p = loadProfile(store);
     expect(p.coins).toBe(1234);
-    expect(p.rank).toBe(1);
+    expect(p.level).toBe(1);
     expect(store.data.has(OLD_WALLET_KEY)).toBe(false);
     expect(JSON.parse(store.data.get(PROFILE_KEY)!).coins).toBe(1234);
     expect(loadProfile(store).coins).toBe(1234);
@@ -326,12 +453,13 @@ describe('Profile storage', () => {
   it('survives broken or missing storage', () => {
     expect(loadProfile(null)).toEqual(newProfile());
     expect(loadProfile(fakeStore({ [PROFILE_KEY]: '{not json' }))).toEqual(newProfile());
-    const p = normalizeProfile({ version: 1, coins: -5, rank: 'x', goals: [{ id: 'nope', target: 1, progress: 0 }], upgrades: { magnet: 99, bogus: 2 }, bestMetres: NaN });
+    const p = normalizeProfile({ version: 1, coins: -5, level: 'x', goals: [{ id: 'nope', target: 1, progress: 0 }], upgrades: { magnet: 99, bogus: 2 }, bestMetres: NaN });
     expect(p).toEqual({ ...newProfile(), upgrades: { magnet: 3 } });
-    // Lost goals at a higher rank: three fresh ones for that rank.
-    const q = normalizeProfile({ version: 1, coins: 5, rank: 6, goals: [], upgrades: {}, bestMetres: 0 });
+    // Lost goals: a designed level gets its own back, past the last level three are drawn.
+    expect(normalizeProfile({ version: 2, coins: 5, level: 6, goals: [], upgrades: {}, bestMetres: 0 }).goals).toEqual(goalsFor(6, 0, rng()));
+    const q = normalizeProfile({ version: 2, coins: 5, level: 12, goals: [], upgrades: {}, bestMetres: 0 });
     expect(q.goals).toHaveLength(3);
-    expect(q.goals.every((g) => g.target === def(g.id).targets[tierFor(6)])).toBe(true);
+    expect(q.goals.every((g) => g.target === def(g.id).targets[tierFor(12)])).toBe(true);
   });
 });
 

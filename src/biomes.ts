@@ -1,7 +1,7 @@
-import { applyPalette, type PaletteKey } from './render/palette';
+import { GOLDEN_FUR, applyPalette, type PaletteKey } from './render/palette';
 import { ALPINE, type SpawnKind, type SpawnTable } from './sim/spawner';
 import type { FeatureKind, TerrainMix } from './sim/terrain';
-import { biomeUnlocked } from './sim/meta';
+import { biomeUnlocked, perksAt } from './sim/meta';
 import { getProfile } from './profile';
 
 // Biomes: the same game on a different mountain. A biome repaints the world
@@ -68,7 +68,7 @@ export const BIOMES: readonly Biome[] = [
     // Fewer rocks, more cabins (their windows glow) and long frozen streams.
     id: 'twilight',
     name: 'Twilight Pines',
-    lockHint: 'Reach rank 3',
+    lockHint: 'Reach level 3',
     colors: {
       skyTop: 0x161a45,
       skyBottom: 0x6b58a8,
@@ -121,7 +121,7 @@ export const BIOMES: readonly Biome[] = [
     // bouncy mountain of whoops, rollers and kickers, with coins everywhere.
     id: 'blossom',
     name: 'Blossom Ridge',
-    lockHint: 'Reach rank 4',
+    lockHint: 'Reach level 4',
     colors: {
       skyTop: 0x7fbcf2,
       skyBottom: 0xffe1ee,
@@ -158,7 +158,7 @@ export const BIOMES: readonly Biome[] = [
     // and long sheets of ice.
     id: 'glacier',
     name: 'Glacier Gorge',
-    lockHint: 'Reach rank 6',
+    lockHint: 'Reach level 6',
     colors: {
       skyTop: 0x2b86d6,
       skyBottom: 0xc9f3ff,
@@ -196,7 +196,7 @@ export const BIOMES: readonly Biome[] = [
     // down. Ledges, cliffs and booters: the biggest air, and the most rocks.
     id: 'ember',
     name: 'Ember Peak',
-    lockHint: 'Reach rank 8',
+    lockHint: 'Reach level 8',
     colors: {
       skyTop: 0x3b1d4a,
       skyBottom: 0xff9a5c,
@@ -248,20 +248,22 @@ export function findBiome(id: string | null): Biome | undefined {
 /** Switch biome (unknown ids fall back to the first). Call before building views. */
 export function applyBiome(id: string): Biome {
   active = findBiome(id) ?? BIOMES[0];
-  applyPalette(active.colors);
+  // A Yeti Legend skis in golden fur, on every mountain.
+  const golden = perksAt(getProfile().level).some((k) => k.golden);
+  applyPalette({ ...active.colors, ...(golden ? GOLDEN_FUR : {}) });
   return active;
 }
 
-/** Biome forced by ?biome= (for testing): playable whatever the rank. */
+/** Biome forced by ?biome= (for testing): playable whatever the level. */
 let forced: string | null = null;
 
 export function forceBiome(id: string): void {
   forced = id;
 }
 
-/** Can this biome be played? Rank perks unlock them (sim/meta.ts PERKS). */
+/** Can this biome be played? Level perks unlock them (sim/meta.ts PERKS). */
 export function isBiomeUnlocked(id: string): boolean {
-  return findBiome(id) !== undefined && (id === forced || biomeUnlocked(id, getProfile().rank));
+  return findBiome(id) !== undefined && (id === forced || biomeUnlocked(id, getProfile().level));
 }
 
 const BIOME_KEY = 'yeti-set-go.biome';

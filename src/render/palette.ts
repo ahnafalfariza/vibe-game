@@ -112,6 +112,15 @@ export type PaletteKey = keyof typeof ALPINE_COLORS;
 
 export const palette: Record<PaletteKey, number> = { ...ALPINE_COLORS };
 
+/** A Yeti Legend's fur (the Golden fur perk): gold with a bronze outline. Beanie and scarf stay. */
+export const GOLDEN_FUR: Partial<Record<PaletteKey, number>> = {
+  fur: 0xffdf85,
+  furShade: 0xe9b44c,
+  furLight: 0xfff3c4,
+  furLine: 0x7a4a12,
+  face: 0x9a6420,
+};
+
 /** Back to the alpine colours, then `overrides` on top. */
 export function applyPalette(overrides: Partial<Record<PaletteKey, number>>): void {
   Object.assign(palette, ALPINE_COLORS, overrides);

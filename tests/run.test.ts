@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { Run, type RunEvent } from '../src/sim/run';
+import { Run, SECOND_WIND_PX, ZONE_POINTS, type RunEvent } from '../src/sim/run';
+import { zoneAt, zoneDensity } from '../src/sim/spawner';
 import { Score } from '../src/sim/score';
 import type { LandingQuality } from '../src/sim/skier';
 import { createTuning } from '../src/tuning';
@@ -29,10 +30,52 @@ describe('Score', () => {
     expect(s.multiplier).toBe(1);
   });
 
+  it('never drops below its floor (Hot start)', () => {
+    const s = new Score(2);
+    expect(s.multiplier).toBe(2);
+    expect(s.land(land('clean', 1))).toBe(200);
+    expect(s.multiplier).toBe(3);
+    s.land(land('crash'));
+    expect(s.multiplier).toBe(2);
+    s.land(land('clean', 1));
+    s.land(land('sloppy'));
+    expect(s.multiplier).toBe(2);
+    const run = new Run(1, createTuning(), { avalanche: false, multiplierFloor: 2 });
+    expect(run.scoring.multiplier).toBe(2);
+  });
+
   it('caps the multiplier', () => {
     const s = new Score();
     for (let i = 0; i < 10; i++) s.land(land('clean', 3));
     expect(s.multiplier).toBe(10);
+  });
+});
+
+describe('Zones', () => {
+  it('number every 500 m, and get denser past zone 3, up to ×1.5', () => {
+    expect([0, 499.9, 500, 1499, 1500].map((m) => zoneAt(m * 40))).toEqual([1, 1, 2, 3, 4]);
+    expect(zoneAt(-100)).toBe(1);
+    expect([1, 3, 4, 6, 8, 20].map(zoneDensity)).toEqual([1, 1, 1.1, 1.3, 1.5, 1.5]);
+  });
+
+  it('mark each new zone once, with a bonus that grows', () => {
+    const run = new Run(2, createTuning({ obstacleDensity: 0, mountDensity: 0 }), { avalanche: false });
+    const idle = { held: false, pressed: false };
+    const zones: number[] = [];
+    while (run.distancePx() < 1050 * 40 && run.time < 120) {
+      const before = run.scoring.tricks;
+      const events: RunEvent[] = [];
+      run.step(idle, events);
+      for (const e of events) {
+        if (e.type !== 'zone') continue;
+        zones.push(e.zone);
+        const awards = events.reduce((n, a) => n + (a.type === 'award' ? a.points : 0), 0);
+        expect(e.points).toBe(ZONE_POINTS * e.zone);
+        expect(run.scoring.tricks - before).toBe(e.points + awards);
+      }
+    }
+    expect(zones).toEqual([2, 3]);
+    expect(run.stats.zone).toBe(3);
   });
 });
 
@@ -47,6 +90,18 @@ describe('Avalanche', () => {
     const x = run.skier.x;
     for (let i = 0; i < 120; i++) run.step(idle, events);
     expect(run.skier.x).toBe(x);
+  });
+
+  it('knocks the avalanche back once with second wind, then catches you', () => {
+    const run = new Run(1, createTuning({ minSpeed: 0, maxSpeed: 0 }), { secondWind: true });
+    const events: RunEvent[] = [];
+    for (let i = 0; i < 120 * 10 && !events.some((e) => e.type === 'secondWind'); i++) run.step(idle, events);
+    expect(events.filter((e) => e.type === 'secondWind')).toHaveLength(1);
+    expect(run.caught).toBe(false);
+    expect(run.avalancheGap()).toBeGreaterThan(SECOND_WIND_PX - 50);
+    for (let i = 0; i < 120 * 10 && !run.caught; i++) run.step(idle, events);
+    expect(run.caught).toBe(true);
+    expect(events.filter((e) => e.type === 'secondWind')).toHaveLength(1);
   });
 
   it('is never further behind than the max gap', () => {

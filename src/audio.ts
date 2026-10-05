@@ -324,14 +324,30 @@ export class Sfx {
     });
   }
 
-  /** Ranked up: a little fanfare climbing an octave and a half. */
-  rankUp(): void {
+  /** Levelled up: a little fanfare climbing an octave and a half. */
+  levelUp(): void {
     [0, 4, 7, 12, 16, 19, 24].forEach((semi, i) => {
       const f = 523.25 * 2 ** (semi / 12);
       const last = i === 6;
       this.tone('square', f, f, last ? 0.6 : 0.14, last ? 0.08 : 0.06, i * 0.09);
       this.tone('triangle', f, f, last ? 0.7 : 0.18, 0.2, i * 0.09);
     });
+  }
+
+  /** Into a new zone: a bright bell, two notes up. */
+  zone(): void {
+    [0, 7].forEach((semi, i) => {
+      const f = 1046.5 * 2 ** (semi / 12);
+      this.tone('sine', f, f, 0.6, 0.16, i * 0.12);
+      this.tone('triangle', f * 2, f * 2, 0.3, 0.05, i * 0.12);
+    });
+  }
+
+  /** Second wind: a rising whoosh as the avalanche falls back. */
+  secondWind(): void {
+    this.noiseBurst(0.5, 'bandpass', 400, 2400, 0.35);
+    this.tone('triangle', 330, 990, 0.5, 0.18);
+    this.tone('sine', 660, 1320, 0.4, 0.08, 0.15);
   }
 
   /** Bought an upgrade: coins clinking into the till. */

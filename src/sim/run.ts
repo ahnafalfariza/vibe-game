@@ -1,6 +1,6 @@
 import { Terrain, type TerrainMix } from './terrain';
 import { Skier, type SkierEvent, type SkierInput } from './skier';
-import { Spawner, type SpawnEvent, type SpawnTable } from './spawner';
+import { Spawner, zoneAt, type SpawnEvent, type SpawnTable } from './spawner';
 import { Mounts, type MountEvent, type MountKind } from './mounts';
 import { MOUNT_POINTS, SMASH_POINTS, Score } from './score';
 import { PX_PER_METRE, type Tuning } from '../tuning';
@@ -12,6 +12,10 @@ export const SIM_DT = 1 / 120;
 const GENERATE_AHEAD = 6000;
 /** How far behind the skier terrain is kept, px. */
 const KEEP_BEHIND = 4000;
+/** Points for reaching zone N: this × N (not × the trick multiplier). */
+export const ZONE_POINTS = 100;
+/** Second wind knocks the avalanche this far back, px (30 m). */
+export const SECOND_WIND_PX = 30 * PX_PER_METRE;
 
 export interface RunStats {
   flips: number;
@@ -40,6 +44,8 @@ export interface RunStats {
   eagleTime: number;
   /** Mounts knocked off by taking a hit for you. */
   shieldsLost: number;
+  /** Furthest zone reached (1 at the start). */
+  zone: number;
 }
 
 export interface RunOptions {
@@ -47,14 +53,18 @@ export interface RunOptions {
   avalanche?: boolean;
   /** Rocks, cabins, ice and mounts. Default: only with the avalanche (the demo run has no player to dodge them). */
   obstacles?: boolean;
-  /** Start the run already riding this, or these bottom of the stack first (rank perks, the shop, ?mount=). */
+  /** Start the run already riding this, or these bottom of the stack first (level perks, the shop, ?mount=). */
   startMount?: MountKind | readonly MountKind[];
-  /** The whole score is multiplied by this (the rank's base multiplier). Default 1. */
+  /** The whole score is multiplied by this (the level's base multiplier). Default 1. */
   scoreMultiplier?: number;
   /** What goes on the slope (a biome's spawn table). Default: the alpine one. */
   table?: SpawnTable;
   /** Which shapes the mountain favours (a biome's terrain mix). Default: the plain mix. */
   terrain?: TerrainMix;
+  /** The trick multiplier never drops below this (Hot start). Default 1. */
+  multiplierFloor?: number;
+  /** The first time the avalanche catches you it's knocked back instead (Second wind). */
+  secondWind?: boolean;
 }
 
 /** Points awarded for a landing, mount or smash (pushed right after its event). */
@@ -62,7 +72,9 @@ export type RunEvent =
   | SkierEvent
   | SpawnEvent
   | MountEvent
-  | { type: 'award'; x: number; y: number; points: number; multiplier: number };
+  | { type: 'award'; x: number; y: number; points: number; multiplier: number }
+  | { type: 'secondWind'; x: number; y: number }
+  | { type: 'zone'; zone: number; x: number; y: number; points: number };
 
 const perKind = (): Record<MountKind, number> => ({ penguin: 0, eagle: 0, snowmobile: 0, bear: 0 });
 
@@ -95,8 +107,11 @@ export class Run {
     smashes: 0,
     eagleTime: 0,
     shieldsLost: 0,
+    zone: 1,
   };
-  readonly scoring = new Score();
+  readonly scoring: Score;
+  /** Second wind still to come this run. */
+  secondWind: boolean;
   /** Front edge of the avalanche, world x. */
   avalancheX: number;
   /** The avalanche reached the skier: the run is over and the skier stops. */
@@ -105,10 +120,12 @@ export class Run {
   constructor(
     readonly seed: number,
     readonly tuning: Tuning,
-    { avalanche = true, obstacles = avalanche, startMount = [], table, terrain, scoreMultiplier = 1 }: RunOptions = {},
+    { avalanche = true, obstacles = avalanche, startMount = [], table, terrain, scoreMultiplier = 1, multiplierFloor = 1, secondWind = false }: RunOptions = {},
   ) {
     this.avalanche = avalanche;
     this.scoreMultiplier = scoreMultiplier;
+    this.scoring = new Score(multiplierFloor);
+    this.secondWind = secondWind;
     this.terrain = new Terrain(seed, tuning, terrain);
     this.spawner = new Spawner(this.terrain, tuning, seed, obstacles, this.startX, table);
     this.mounts = new Mounts(tuning);
@@ -141,7 +158,7 @@ export class Run {
   step(input: SkierInput, events: RunEvent[]): void {
     this.time += SIM_DT;
     if (!this.caught) this.stepSkier(input, events);
-    if (this.avalanche) this.stepAvalanche();
+    if (this.avalanche) this.stepAvalanche(events);
   }
 
   private stepSkier(input: SkierInput, events: RunEvent[]): void {
@@ -177,7 +194,7 @@ export class Run {
         if (e.obstacle === 'cabin') this.spawner.smash(e.x);
         if (e.crashed) {
           st.crashes++;
-          this.scoring.multiplier = 1;
+          this.scoring.reset();
         }
       } else if (e.type === 'land') {
         st.bestAirTime = Math.max(st.bestAirTime, e.airTime);
@@ -203,19 +220,31 @@ export class Run {
       } else if (e.type === 'dismount' && (e.reason === 'rock' || e.reason === 'cabin' || e.reason === 'landing')) {
         // Losing a shield stings like a sloppy landing: the streak is gone.
         st.shieldsLost++;
-        this.scoring.multiplier = 1;
+        this.scoring.reset();
       }
     }
     st.topMultiplier = Math.max(st.topMultiplier, this.scoring.multiplier);
+    // Into a new zone: a flat bonus that grows with each one.
+    for (const zone = zoneAt(this.distancePx()); st.zone < zone; ) {
+      st.zone++;
+      const points = ZONE_POINTS * st.zone;
+      this.scoring.tricks += points;
+      events.push({ type: 'zone', zone: st.zone, x: sk.x, y: sk.y, points });
+    }
     if (st.crashes === 0) st.noCrashMetres = this.distancePx() / PX_PER_METRE;
   }
 
-  private stepAvalanche(): void {
+  private stepAvalanche(events: RunEvent[]): void {
     this.avalancheX += this.avalancheSpeed() * SIM_DT;
     if (this.caught) return;
     // Rubber band: however fast you go, it is never far behind.
     this.avalancheX = Math.max(this.avalancheX, this.skier.x - this.tuning.avalancheMaxGap);
-    if (this.avalancheX >= this.skier.x) this.caught = true;
+    if (this.avalancheX < this.skier.x) return;
+    if (this.secondWind) {
+      this.secondWind = false;
+      this.avalancheX = this.skier.x - SECOND_WIND_PX;
+      events.push({ type: 'secondWind', x: this.skier.x, y: this.skier.y });
+    } else this.caught = true;
   }
 }
 

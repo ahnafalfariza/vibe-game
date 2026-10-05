@@ -19,16 +19,26 @@ export const SMASH_POINTS = 150;
 
 export class Score {
   tricks = 0;
-  multiplier = 1;
+  multiplier: number;
+
+  /** `floor`: the multiplier never drops below this (the Hot start perk). */
+  constructor(readonly floor = 1) {
+    this.multiplier = floor;
+  }
+
+  /** The streak is gone: back to the floor. */
+  reset(): void {
+    this.multiplier = this.floor;
+  }
 
   /** Score one landing. Returns the points awarded (multiplier already applied). */
   land(e: Landing): number {
     if (e.quality === 'crash') {
-      this.multiplier = 1;
+      this.reset();
       return 0;
     }
     if (e.quality === 'sloppy') {
-      this.multiplier = 1;
+      this.reset();
       const points = 50 * e.flips;
       this.tricks += points;
       return points;

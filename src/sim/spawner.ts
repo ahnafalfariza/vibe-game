@@ -209,6 +209,19 @@ interface Ghost {
   spec: (typeof GHOSTS)[number];
 }
 
+/** A zone, a milestone on the way down: one every this many metres. */
+export const ZONE_METRES = 500;
+
+/** The zone a point `distance` px past the start is in: 1 for the first 500 m. */
+export function zoneAt(distance: number): number {
+  return 1 + Math.floor(Math.max(0, distance) / (ZONE_METRES * PX_PER_METRE));
+}
+
+/** Obstacle density per zone: the difficulty ramp tops out in zone 3, then +10% a zone, up to ×1.5. */
+export function zoneDensity(zone: number): number {
+  return Math.min(1.5, 1 + 0.1 * Math.max(0, zone - 3));
+}
+
 export class Spawner implements Ground {
   /** Everything on the slope near the skier, roughly in x order. */
   readonly entities: Entity[] = [];
@@ -237,7 +250,7 @@ export class Spawner implements Ground {
     /** Rocks, cabins and ice. Off for the title screen's demo run (coins only). */
     readonly obstacles = true,
     /** Where the skier (and so the ghosts) start. */
-    startX = 0,
+    private readonly startX = 0,
     private readonly table: SpawnTable = ALPINE,
   ) {
     this.rng = new Rng((seed ^ 0x5eed5) + 1);
@@ -412,7 +425,7 @@ export class Spawner implements Ground {
     const entries = Object.entries(this.table[f.kind]) as [SpawnKind, [number, number]][];
     if (entries.length === 0) return;
     const d = Math.min(1, Math.max(0, f.x0 / DIFFICULTY_RAMP));
-    const density = this.obstacles ? this.tuning.obstacleDensity : 0;
+    const density = this.obstacles ? this.tuning.obstacleDensity * zoneDensity(zoneAt(f.x0 - this.startX)) : 0;
     // Mounts come with the obstacles, and only once one is due.
     const mountDue = this.obstacles && MOUNT_KINDS.some((k) => f.x1 > this.mountDue(k));
     const mounts = mountDue ? this.tuning.mountDensity : 0;
