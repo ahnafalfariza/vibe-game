@@ -189,7 +189,7 @@ console.log(`   per run: ${mean(finished.map((r) => r.stats.coins))} coins, ${me
 // The same without mounts, for comparison.
 const bare = BOTS.map(([name, make]) => `${name} ${mean([1, 2, 3, 4, 5].map((seed) => parseInt(survive(make(), seed, createTuning({ mountDensity: 0 })))))}s`);
 console.log('   … without mounts: ' + bare.join('  '));
-// Starting on each mount (the rank perk / shop item): the hopper, over the same seeds.
+// Starting on each mount (the level perk / shop item): the hopper, over the same seeds.
 const starts = MOUNT_KINDS.map((kind) => {
   const runs: Run[] = [];
   const times = [1, 2, 3, 4, 5].map((seed) => parseInt(survive(hopper(), seed, createTuning(), kind, runs)));

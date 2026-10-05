@@ -12,7 +12,7 @@ import {
   goalText,
   isTotalGoal,
   nextPerk,
-  rankMultiplier,
+  levelMultiplier,
   upgradeCost,
   upgradeLevel,
   type UpgradeId,
@@ -62,11 +62,11 @@ export interface RunResult {
   newBest: boolean;
   /** "Rode 2 penguins · 3 smashes" ('' for none). */
   rides: string;
-  /** The rank (and its score multiplier) the run was played at. */
-  rank: number;
-  rankMultiplier: number;
+  /** The level (and its score multiplier) the run was played at. */
+  level: number;
+  levelMultiplier: number;
   goals: GoalLine[];
-  rankUp: { rank: number; multiplier: number; unlocks: { name: string; text: string }[] } | null;
+  levelUp: { level: number; multiplier: number; unlocks: { name: string; text: string }[] } | null;
 }
 
 /** Ignore Space/Enter this long after the game-over screen appears, so a held jump doesn't skip it, ms. */
@@ -128,6 +128,10 @@ export class Menu {
       </section>
       <section class="screen pause" hidden>
         <h2>Paused</h2>
+        <div class="card run-goals">
+          <p class="card-head"></p>
+          <ul class="goal-list"></ul>
+        </div>
         <button class="btn primary" data-act="resume">Resume</button>
         <button class="btn" data-act="restart">Restart</button>
         <button class="btn" data-act="home">Main menu</button>
@@ -149,9 +153,9 @@ export class Menu {
             </div>
           </div>
           <div class="card over-goals">
-            <div class="rankup" hidden>
-              <p class="rankup-title">Rank up!</p>
-              <p class="rankup-text"></p>
+            <div class="levelup" hidden>
+              <p class="levelup-title">Level up!</p>
+              <p class="levelup-text"></p>
               <ul class="unlocks"></ul>
             </div>
             <p class="card-head"></p>
@@ -256,26 +260,26 @@ export class Menu {
     el.querySelector<HTMLButtonElement>('[data-act="play"]')!.disabled = locked;
   }
 
-  /** The Goals / Shop buttons' little tags: rank and goals done, coins. */
+  /** The Goals / Shop buttons' little tags: level and goals done, coins. */
   private renderTitleMeta(): void {
     const p = getProfile();
     const el = this.screens.title;
-    el.querySelector('.goals-tag')!.textContent = `Rank ${p.rank} · ${p.goals.filter((g) => g.done).length}/${p.goals.length}`;
+    el.querySelector('.goals-tag')!.textContent = `Level ${p.level} · ${p.goals.filter((g) => g.done).length}/${p.goals.length}`;
     el.querySelector('.coins-tag')!.textContent = fmt(p.coins);
   }
 
   private renderGoals(): void {
     const p = getProfile();
     const el = this.screens.goals;
-    el.querySelector('.card-head')!.textContent = `Rank ${p.rank} · score ×${rankMultiplier(p.rank)}`;
+    el.querySelector('.card-head')!.textContent = `Level ${p.level} · score ×${levelMultiplier(p.level)}`;
     el.querySelector('.goal-list')!.innerHTML = goalList(
       p.goals.map((g) => ({ text: goalText(g), progress: (isTotalGoal(g) ? '' : 'Best ') + goalProgressText(g), done: g.done, fresh: false })),
     );
-    const perk = nextPerk(p.rank);
+    const perk = nextPerk(p.level);
     const all = p.goals.every((g) => g.done);
     el.querySelector('.card-foot')!.textContent = all
-      ? 'All done! Finish a run to rank up.'
-      : `Finish all three to reach rank ${p.rank + 1} (score ×${rankMultiplier(p.rank + 1)})` + (perk ? ` · Rank ${perk.rank}: ${perk.name}` : '');
+      ? 'All done! Finish a run to level up.'
+      : `Finish all three to reach level ${p.level + 1} (score ×${levelMultiplier(p.level + 1)})` + (perk ? ` · Level ${perk.level}: ${perk.name}` : '');
   }
 
   private renderShop(): void {
@@ -341,7 +345,11 @@ export class Menu {
     this.pauseButton.hidden = true;
   }
 
-  showPause(): void {
+  /** `goals` with this run counted so far. */
+  showPause(level: number, goals: GoalLine[]): void {
+    const el = this.screens.pause;
+    el.querySelector('.card-head')!.textContent = `Goals · Level ${level}`;
+    el.querySelector('.goal-list')!.innerHTML = goalList(goals);
     this.show('pause');
   }
 
@@ -355,13 +363,13 @@ export class Menu {
     rides.hidden = r.rides === '';
     el.querySelector('.coins-line')!.innerHTML = `${COIN}+${fmt(r.coins)} coins · ${fmt(r.wallet)} total`;
     el.querySelector('.best')!.textContent = r.newBest ? '' : `Best ${fmt(r.best)}`;
-    el.querySelector('.card-head')!.textContent = `Goals · Rank ${r.rank}` + (r.rankMultiplier > 1 ? ` · score ×${r.rankMultiplier}` : '');
+    el.querySelector('.card-head')!.textContent = `Goals · Level ${r.level}` + (r.levelMultiplier > 1 ? ` · score ×${r.levelMultiplier}` : '');
     el.querySelector('.goal-list')!.innerHTML = goalList(r.goals);
-    const up = el.querySelector<HTMLElement>('.rankup')!;
-    up.hidden = r.rankUp === null;
-    if (r.rankUp) {
-      up.querySelector('.rankup-text')!.textContent = `Rank ${r.rankUp.rank} · score ×${r.rankUp.multiplier} from now on`;
-      up.querySelector('.unlocks')!.innerHTML = r.rankUp.unlocks.map((u) => `<li><b>Unlocked: ${u.name}</b><span>${u.text}</span></li>`).join('');
+    const up = el.querySelector<HTMLElement>('.levelup')!;
+    up.hidden = r.levelUp === null;
+    if (r.levelUp) {
+      up.querySelector('.levelup-text')!.textContent = `Level ${r.levelUp.level} · score ×${r.levelUp.multiplier} from now on`;
+      up.querySelector('.unlocks')!.innerHTML = r.levelUp.unlocks.map((u) => `<li><b>Unlocked: ${u.name}</b><span>${u.text}</span></li>`).join('');
     }
     this.show('over');
   }

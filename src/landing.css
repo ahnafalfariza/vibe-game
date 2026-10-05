@@ -1273,7 +1273,7 @@ kbd.held {
   margin-top: clamp(56px, 8vw, 96px);
 }
 
-/* Each rank hangs off the cable on its own chair. */
+/* Each level hangs off the cable on its own chair. */
 .chairlift {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
@@ -1341,7 +1341,7 @@ kbd.held {
   }
 }
 
-.chair-rank {
+.chair-level {
   display: inline-block;
   margin-bottom: 8px;
   padding: 0.1em 0.6em;

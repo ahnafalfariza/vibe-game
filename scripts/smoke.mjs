@@ -57,7 +57,7 @@ try {
     await page.waitForTimeout(1000);
     await page.screenshot({ path: `${outDir}/${name}-0-title.png` });
     // Biome picker: the demo run behind the title switches right away. Twilight Pines is
-    // locked until rank 3, so on a fresh profile it's only a preview: not remembered, not playable.
+    // locked until level 3, so on a fresh profile it's only a preview: not remembered, not playable.
     await page.click('#overlay [data-act="biome-next"]');
     await page.waitForTimeout(800);
     const picked = await page.evaluate(() => ({

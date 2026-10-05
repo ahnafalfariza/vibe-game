@@ -491,7 +491,8 @@ body {
   margin-top: clamp(2px, 1vmin, 8px);
 }
 
-.over-goals {
+.over-goals,
+.run-goals {
   /* Not a % width: it must hold during intrinsic sizing too, or the row wraps. */
   width: min(400px, 100vw - 32px);
 }
@@ -502,7 +503,7 @@ body {
 }
 
 /* Short portrait phones: vmin is the width there, so size by height too, or a
-   rank-up card runs past the bottom (fits down to 360x480). */
+   level-up card runs past the bottom (fits down to 360x480). */
 @media (orientation: portrait) and (max-height: 700px) {
   .over {
     gap: 4px;
@@ -533,7 +534,7 @@ body {
   }
 }
 
-.rankup {
+.levelup {
   margin: -2px -6px 8px;
   padding: 6px 10px 8px;
   border-radius: 12px;
@@ -543,11 +544,11 @@ body {
   animation: pop-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.3s backwards;
 }
 
-.screen .rankup p {
+.screen .levelup p {
   text-shadow: 0 2px 0 var(--orange-dark);
 }
 
-.screen .rankup-title {
+.screen .levelup-title {
   font-weight: 600;
   font-size: clamp(22px, 4.6vmin, 32px);
   line-height: 1.1;
@@ -581,8 +582,8 @@ body {
   .screen,
   .screen .new-best,
   .goal.fresh,
-  .rankup,
-  .screen .rankup-title {
+  .levelup,
+  .screen .levelup-title {
     animation: none;
   }
 }

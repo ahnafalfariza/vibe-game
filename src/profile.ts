@@ -1,6 +1,6 @@
 import { newProfile, normalizeProfile, type Profile } from './sim/meta';
 
-// The player's profile (rank, goals, coins, upgrades) in localStorage. The
+// The player's profile (level, goals, coins, upgrades) in localStorage. The
 // rules live in sim/meta.ts; this only loads and saves. Storage can be
 // missing or throw (private mode, tests): the game then plays on without it.
 

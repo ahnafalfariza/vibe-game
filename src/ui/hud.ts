@@ -21,9 +21,9 @@ export interface HudStats {
   eagle: number | null;
   /** Snowmobile fuel left (0..1), while on one. */
   fuel: number | null;
-  rank: number;
-  /** The rank's base score multiplier. */
-  rankMultiplier: number;
+  level: number;
+  /** The level's base score multiplier. */
+  levelMultiplier: number;
 }
 
 /** Space between stacked popups, px at the design height. */
@@ -53,7 +53,7 @@ export class Hud {
   private readonly ride: Phaser.GameObjects.Text;
   private readonly bars: Phaser.GameObjects.Graphics;
   private readonly barLabels: Phaser.GameObjects.Text[];
-  private readonly rank: Phaser.GameObjects.Text;
+  private readonly level: Phaser.GameObjects.Text;
   /** Floating callouts still on screen, oldest first. */
   private readonly popups: { box: Phaser.GameObjects.Container; text: Phaser.GameObjects.Text; y: number }[] = [];
   /** Goal toasts waiting their turn, and the parent of the one showing. */
@@ -94,11 +94,11 @@ export class Hud {
     this.bars = scene.add.graphics();
     layer.add(this.bars);
     this.barLabels = [add('', { fontStyle: '600' }).setOrigin(0, 0.5), add('', { fontStyle: '600' }).setOrigin(0, 0.5)];
-    this.rank = add('', { fontStyle: '500' }).setOrigin(1, 0.5);
+    this.level = add('', { fontStyle: '500' }).setOrigin(1, 0.5);
     // Above the popups.
     this.toastRoot = scene.add.container(0, 0).setDepth(1);
     layer.add(this.toastRoot);
-    this.items = [this.score, this.multiplier, this.speed, this.warning, this.best, this.hint, this.keys, this.coins, this.coinIcon, this.ride, this.bars, ...this.barLabels, this.rank, this.toastRoot];
+    this.items = [this.score, this.multiplier, this.speed, this.warning, this.best, this.hint, this.keys, this.coins, this.coinIcon, this.ride, this.bars, ...this.barLabels, this.level, this.toastRoot];
   }
 
   resize(width: number, height: number): void {
@@ -122,7 +122,7 @@ export class Hud {
     this.coinIcon.fillStyle(palette.coinRim, 1).fillCircle(0, 0, 10 * u);
     this.coinIcon.fillStyle(palette.coin, 1).fillCircle(0, 0, 7.5 * u);
     this.coinIcon.fillStyle(palette.coinShine, 1).fillEllipse(-3 * u, -3.5 * u, 3 * u, 5 * u);
-    outline(this.rank, 20, 5).setPosition(width - 96 * u, 116 * u);
+    outline(this.level, 20, 5).setPosition(width - 96 * u, 116 * u);
     outline(this.ride, 22, 5).setPosition(26 * u, 152 * u);
     for (const t of this.barLabels) outline(t, 17, 4);
     outline(this.hint, 28, 6).setPosition(width / 2, height - 28 * u);
@@ -141,7 +141,7 @@ export class Hud {
     this.score.setText(fmt(s.score));
     this.speed.setText(`${fmt(s.metres)} m   ${Math.round(s.kmh)} km/h`);
     this.best.setText(s.best > 0 ? `Best ${fmt(Math.max(s.best, s.score))}` : '');
-    this.rank.setText(s.rankMultiplier > 1 ? `Rank ${s.rank}  ·  score ×${s.rankMultiplier}` : '');
+    this.level.setText(s.levelMultiplier > 1 ? `Level ${s.level}  ·  score ×${s.levelMultiplier}` : '');
 
     this.multiplier.setText(s.multiplier > 1 ? `×${s.multiplier}` : '');
     this.multiplier.setPosition(this.score.x + this.score.width + 12 * u, this.score.y + this.score.height * 0.55);

@@ -85,11 +85,11 @@ describe('Biomes', () => {
     }
   });
 
-  it('unlock at the rank their lock hint says, one perk each', () => {
+  it('unlock at the level their lock hint says, one perk each', () => {
     for (const b of BIOMES.slice(1)) {
       const perks = PERKS.filter((p) => p.biome === b.id);
       expect(perks, b.id).toHaveLength(1);
-      expect(b.lockHint).toBe(`Reach rank ${perks[0].rank}`);
+      expect(b.lockHint).toBe(`Reach level ${perks[0].level}`);
     }
   });
 

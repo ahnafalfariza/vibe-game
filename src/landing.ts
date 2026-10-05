@@ -1,6 +1,6 @@
 // The landing page (index.html). Numbers on it come from the game itself, so
 // they stay true when the game is retuned: landing angles from the tuning,
-// ranks and shop prices from the meta rules.
+// levels and shop prices from the meta rules.
 
 import '@fontsource/fredoka/500.css';
 import '@fontsource/fredoka/600.css';
@@ -150,11 +150,11 @@ function judgeLanding(): void {
 tilt.addEventListener('input', judgeLanding);
 judgeLanding();
 
-// ---- Twilight Pines: the rank perks and the shop, straight from the rules.
+// ---- Twilight Pines: the level perks and the shop, straight from the rules.
 
 $('perks').innerHTML = PERKS.map(
   (p) =>
-    `<li><div class="chair${p.biome ? ' unlock' : ''}"><span class="chair-rank">Rank ${p.rank}</span><b>${p.name}</b><span>${p.text}</span></div></li>`,
+    `<li><div class="chair${p.biome ? ' unlock' : ''}"><span class="chair-level">Level ${p.level}</span><b>${p.name}</b><span>${p.text}</span></div></li>`,
 ).join('');
 
 $('shop').innerHTML = [...UPGRADES]

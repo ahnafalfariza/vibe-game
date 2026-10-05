@@ -28,7 +28,7 @@ async function main(): Promise<void> {
   const scene = () => game?.scene.getScene('play') as PlayScene | null | undefined;
   const sfx = new Sfx();
   const touch = matchMedia('(pointer: coarse)').matches;
-  // ?biome=… forces one (for testing; not remembered, playable at any rank), else the last one picked.
+  // ?biome=… forces one (for testing; not remembered, playable at any level), else the last one picked.
   const forced = findBiome(params.get('biome'))?.id;
   if (forced) forceBiome(forced);
   const biome = forced ?? loadBiome();

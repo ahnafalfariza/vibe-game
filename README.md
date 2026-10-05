@@ -19,7 +19,7 @@ Portfolio / learning project. Not affiliated with the original.
 procedural slope, jump, hold-to-backflip, landing judgement, crash and
 recover, an avalanche chasing you, rocks, cabins with rideable roofs, ice
 patches, coin clusters, mounts (penguin, eagle, snowmobile, polar bear), score
-with a trick multiplier, goals and ranks, a coin shop, five biomes (Sunny
+with a trick multiplier, goals and levels, a coin shop, five biomes (Sunny
 Slopes, Twilight Pines, Blossom Ridge, Glacier Gorge and Ember Peak), each
 with its own mix of terrain, synthesised sound and music, and title / pause /
 game-over screens. See [`docs/research.md`](docs/research.md) for the plan and
@@ -44,7 +44,7 @@ Handy URL parameters (on `/play/`):
 | `?mount=penguin` | Start every run riding a mount (`penguin`, `eagle`, `snowmobile`, `bear`) |
 | `?biome=twilight` | Force a biome (`alpine`, `twilight`, `blossom`, `glacier`, `ember`), even a locked one |
 | `?coins=5000` | Top the wallet up to at least this many coins (for testing the shop) |
-| `?profile=reset` | Wipe saved progress: coins, rank, goals, upgrades |
+| `?profile=reset` | Wipe saved progress: coins, level, goals, upgrades |
 
 ## Controls
 
@@ -85,11 +85,12 @@ scores 100 (2 flips 300, 3 flips 600) and raises the multiplier by the
 number of flips, up to ×10. A sloppy landing or a crash resets it to ×1.
 
 You always have three **goals** (Goals on the title screen). Finish all three
-to rank up: each rank multiplies your whole score by another ×0.25, and some
-ranks unlock perks: rank 2 starts every run on a penguin, rank 3 unlocks the
-Twilight Pines biome, rank 4 Blossom Ridge, rank 5 brings mounts more often,
-rank 6 unlocks Glacier Gorge, rank 7 shortens wipeouts, and rank 8 unlocks
-Ember Peak. Spend coins in the **Shop** on upgrades: head start, coin magnet,
+to reach the next level. Levels 1–10 each have their own three goals, teaching
+one new thing at a time; past level 10 they're drawn at random. Each level
+multiplies your whole score by another ×0.25, and some unlock perks: level 2
+starts every run on a penguin, level 3 unlocks the Twilight Pines biome,
+level 4 Blossom Ridge, level 5 brings mounts more often, level 6 unlocks
+Glacier Gorge, level 7 shortens wipeouts, and level 8 unlocks Ember Peak. Spend coins in the **Shop** on upgrades: head start, coin magnet,
 cluster boost, avalanche delay, eagle wings, bigger tank, sturdy landings.
 
 ## Tuning the feel
@@ -112,12 +113,12 @@ src/
     mounts.ts     The mount stack, shields, eagle flight, fuel, and per-mount feel
     run.ts        One run: fixed 120 Hz step, avalanche, stats
     score.ts      Trick points and the multiplier
-    meta.ts       Goals, ranks, perks and shop upgrades (pure rules)
+    meta.ts       Goals, levels, perks and shop upgrades (pure rules)
     rng.ts        Seeded PRNG
   render/       Phaser views of the sim (terrain chunks, yeti, mounts, obstacles, avalanche, sky, particles)
   ui/           HUD, DOM menus (title / pause / game over) and the tuning panel
   audio.ts      Every sound and the music loop, synthesised with WebAudio (no audio files)
-  profile.ts    Saved progress (coins, rank, goals, upgrades) in localStorage
+  profile.ts    Saved progress (coins, level, goals, upgrades) in localStorage
   biomes.ts     Biome palettes, backdrops, terrain mixes and spawn tables
   scenes/       PlayScene wires input → sim → views, three cameras
   tuning.ts     Every feel number in one place

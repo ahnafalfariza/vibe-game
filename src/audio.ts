@@ -324,8 +324,8 @@ export class Sfx {
     });
   }
 
-  /** Ranked up: a little fanfare climbing an octave and a half. */
-  rankUp(): void {
+  /** Levelled up: a little fanfare climbing an octave and a half. */
+  levelUp(): void {
     [0, 4, 7, 12, 16, 19, 24].forEach((semi, i) => {
       const f = 523.25 * 2 ** (semi / 12);
       const last = i === 6;

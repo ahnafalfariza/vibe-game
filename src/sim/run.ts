@@ -47,9 +47,9 @@ export interface RunOptions {
   avalanche?: boolean;
   /** Rocks, cabins, ice and mounts. Default: only with the avalanche (the demo run has no player to dodge them). */
   obstacles?: boolean;
-  /** Start the run already riding this, or these bottom of the stack first (rank perks, the shop, ?mount=). */
+  /** Start the run already riding this, or these bottom of the stack first (level perks, the shop, ?mount=). */
   startMount?: MountKind | readonly MountKind[];
-  /** The whole score is multiplied by this (the rank's base multiplier). Default 1. */
+  /** The whole score is multiplied by this (the level's base multiplier). Default 1. */
   scoreMultiplier?: number;
   /** What goes on the slope (a biome's spawn table). Default: the alpine one. */
   table?: SpawnTable;

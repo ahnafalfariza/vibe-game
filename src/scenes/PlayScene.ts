@@ -3,7 +3,7 @@ import { Run, SIM_DT, type RunEvent } from '../sim/run';
 import { wrapAngle } from '../sim/skier';
 import { BIG_AIR_TIME } from '../sim/score';
 import { Rng, randomSeed } from '../sim/rng';
-import { RunGoals, goalProgressText, goalText, rideSummary, runSetup, type RunProgress } from '../sim/meta';
+import { RunGoals, goalProgressText, goalText, goalValue, rideSummary, runSetup, type RunProgress } from '../sim/meta';
 import { PX_PER_METRE, type Tuning } from '../tuning';
 import { Background } from '../render/background';
 import { TerrainView } from '../render/terrainView';
@@ -14,7 +14,7 @@ import { ObstacleView } from '../render/obstacleView';
 import { MountView } from '../render/mountView';
 import { MOUNT_NAMES, type MountKind } from '../sim/mounts';
 import { palette } from '../render/palette';
-import { applyBiome } from '../biomes';
+import { applyBiome, currentBiome } from '../biomes';
 import { Hud } from '../ui/hud';
 import type { Tuner } from '../ui/tuner';
 import { loadBest, saveBest, type Menu } from '../ui/menu';
@@ -198,7 +198,16 @@ export class PlayScene extends Phaser.Scene {
     this.releaseInput();
     this.scene.pause();
     this.ctx.sfx.setPaused(true);
-    this.ctx.menu.showPause();
+    const r = this.progress();
+    this.ctx.menu.showPause(
+      getProfile().level,
+      (this.goals?.profile.goals ?? []).map((g) => ({
+        text: goalText(g),
+        progress: goalProgressText({ ...g, progress: goalValue(g, r) }),
+        done: g.done,
+        fresh: this.goals!.completed.has(g),
+      })),
+    );
   }
 
   resume(): void {
@@ -352,8 +361,8 @@ export class PlayScene extends Phaser.Scene {
         stack: [...mounts.stack, ...(mounts.state === 'carried' ? (['eagle'] as const) : [])].map((k) => MOUNT_NAMES[k]),
         eagle: mounts.state === 'carried' ? mounts.eagleTime / this.run.tuning.eagleTime : null,
         fuel: mounts.stack[0] === 'snowmobile' ? mounts.fuel / this.run.tuning.snowmobileFuel : null,
-        rank: getProfile().rank,
-        rankMultiplier: this.run.scoreMultiplier,
+        level: getProfile().level,
+        levelMultiplier: this.run.scoreMultiplier,
       },
       dt,
     );
@@ -373,7 +382,7 @@ export class PlayScene extends Phaser.Scene {
   }
 
   private progress(): RunProgress {
-    return { stats: this.run.stats, metres: this.run.distancePx() / PX_PER_METRE, score: this.run.score, seconds: this.run.time };
+    return { stats: this.run.stats, metres: this.run.distancePx() / PX_PER_METRE, score: this.run.score, seconds: this.run.time, biome: currentBiome().id };
   }
 
   /** Goals met mid-run: a toast and a chime, saved straight away. */
@@ -382,7 +391,7 @@ export class PlayScene extends Phaser.Scene {
     const done = this.goals.check(this.progress());
     for (const g of done) {
       const all = this.goals.profile.goals.every((x) => x.done);
-      this.hud.toast(all ? 'All 3 goals done! Rank up at the finish' : 'Goal complete!', goalText(g));
+      this.hud.toast(all ? 'All 3 goals done! Level up at the finish' : 'Goal complete!', goalText(g));
       this.ctx.sfx.goal();
     }
     if (done.length) persist();
@@ -406,10 +415,10 @@ export class PlayScene extends Phaser.Scene {
     const newBest = score > this.best;
     if (newBest) saveBest(score);
     const st = this.run.stats;
-    const rank = getProfile().rank;
+    const level = getProfile().level;
     const summary = this.goals!.finish(this.final ?? this.progress());
     persist();
-    if (summary.rankUp) this.ctx.sfx.rankUp();
+    if (summary.levelUp) this.ctx.sfx.levelUp();
     this.hud.setVisible(false);
     this.ctx.menu.showGameOver({
       score,
@@ -421,13 +430,13 @@ export class PlayScene extends Phaser.Scene {
       best: Math.max(score, this.best),
       newBest,
       rides: rideSummary(st),
-      rank,
-      rankMultiplier: this.run.scoreMultiplier,
+      level,
+      levelMultiplier: this.run.scoreMultiplier,
       goals: summary.goals.map((g) => ({ text: goalText(g), progress: goalProgressText(g), done: g.done, fresh: g.fresh })),
-      rankUp: summary.rankUp && {
-        rank: summary.rankUp.rank,
-        multiplier: summary.rankUp.multiplier,
-        unlocks: summary.rankUp.perks.map(({ name, text }) => ({ name, text })),
+      levelUp: summary.levelUp && {
+        level: summary.levelUp.level,
+        multiplier: summary.levelUp.multiplier,
+        unlocks: summary.levelUp.perks.map(({ name, text }) => ({ name, text })),
       },
     });
   }
