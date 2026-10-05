@@ -15,6 +15,11 @@ if (!url) {
   server = spawn('bunx', ['vite', 'preview', '--port', port, '--strictPort'], { stdio: 'ignore' });
   url = `http://localhost:${port}/play/?seed=7`;
   await new Promise((r) => setTimeout(r, 2500));
+  // --strictPort exits if the port is taken; don't go on to test whatever holds it.
+  if (server.exitCode !== null) {
+    console.error(`vite preview exited (code ${server.exitCode}): is port ${port} already in use? Free it or set PORT.`);
+    process.exit(1);
+  }
 }
 
 const executablePath = ['/opt/pw-browsers/chromium', process.env.CHROMIUM_PATH].find((p) => p && existsSync(p));
