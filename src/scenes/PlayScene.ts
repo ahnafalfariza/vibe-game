@@ -3,7 +3,7 @@ import { Run, SIM_DT, type RunEvent } from '../sim/run';
 import { wrapAngle } from '../sim/skier';
 import { BIG_AIR_TIME } from '../sim/score';
 import { Rng, randomSeed } from '../sim/rng';
-import { RunGoals, goalProgressText, goalText, rideSummary, runSetup, type RunProgress } from '../sim/meta';
+import { RunGoals, goalProgressText, goalText, goalValue, rideSummary, runSetup, type RunProgress } from '../sim/meta';
 import { PX_PER_METRE, type Tuning } from '../tuning';
 import { Background } from '../render/background';
 import { TerrainView } from '../render/terrainView';
@@ -200,7 +200,16 @@ export class PlayScene extends Phaser.Scene {
     this.releaseInput();
     this.scene.pause();
     this.ctx.sfx.setPaused(true);
-    this.ctx.menu.showPause();
+    const r = this.progress();
+    this.ctx.menu.showPause(
+      getProfile().level,
+      (this.goals?.profile.goals ?? []).map((g) => ({
+        text: goalText(g),
+        progress: goalProgressText({ ...g, progress: goalValue(g, r) }),
+        done: g.done,
+        fresh: this.goals!.completed.has(g),
+      })),
+    );
   }
 
   resume(): void {
