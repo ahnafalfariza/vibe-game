@@ -491,7 +491,8 @@ body {
   margin-top: clamp(2px, 1vmin, 8px);
 }
 
-.over-goals {
+.over-goals,
+.run-goals {
   /* Not a % width: it must hold during intrinsic sizing too, or the row wraps. */
   width: min(400px, 100vw - 32px);
 }

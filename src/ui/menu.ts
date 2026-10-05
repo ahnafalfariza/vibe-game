@@ -128,6 +128,10 @@ export class Menu {
       </section>
       <section class="screen pause" hidden>
         <h2>Paused</h2>
+        <div class="card run-goals">
+          <p class="card-head"></p>
+          <ul class="goal-list"></ul>
+        </div>
         <button class="btn primary" data-act="resume">Resume</button>
         <button class="btn" data-act="restart">Restart</button>
         <button class="btn" data-act="home">Main menu</button>
@@ -341,7 +345,11 @@ export class Menu {
     this.pauseButton.hidden = true;
   }
 
-  showPause(): void {
+  /** `goals` with this run counted so far. */
+  showPause(rank: number, goals: GoalLine[]): void {
+    const el = this.screens.pause;
+    el.querySelector('.card-head')!.textContent = `Goals · Rank ${rank}`;
+    el.querySelector('.goal-list')!.innerHTML = goalList(goals);
     this.show('pause');
   }
 
