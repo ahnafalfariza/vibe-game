@@ -12,6 +12,8 @@ import { SnowSpray, Snowfall } from '../render/effects';
 import { AvalancheView } from '../render/avalancheView';
 import { ObstacleView } from '../render/obstacleView';
 import { MountView } from '../render/mountView';
+import { ZoneGateView } from '../render/zoneGateView';
+import { ZONE_METRES } from '../sim/spawner';
 import { MOUNT_NAMES, type MountKind } from '../sim/mounts';
 import { palette } from '../render/palette';
 import { applyBiome, currentBiome } from '../biomes';
@@ -95,6 +97,7 @@ export class PlayScene extends Phaser.Scene {
   private avalancheView!: AvalancheView;
   private obstacleView!: ObstacleView;
   private mountView!: MountView;
+  private zoneView!: ZoneGateView;
 
   // Per-run state (reset in create(): the scene instance is reused on restart).
   private state: State = 'menu';
@@ -169,6 +172,7 @@ export class PlayScene extends Phaser.Scene {
     this.background = new Background(this, bgLayer);
     this.terrainView = new TerrainView(this, terrainLayer, this.run.terrain);
     this.spray = new SnowSpray(this, actorLayer);
+    this.zoneView = new ZoneGateView(this, propLayer, this.run.terrain, this.run.startX);
     this.obstacleView = new ObstacleView(this, propLayer, this.run.spawner, this.run.terrain);
     this.mountView = new MountView(this, propLayer, actorLayer, this.run.spawner);
     // Depths in the actor layer: spray, the stack under the yeti, the yeti, an eagle carrying it.
@@ -320,6 +324,7 @@ export class PlayScene extends Phaser.Scene {
 
     const halfW = width / zoom / 2;
     this.terrainView.update(this.view.x - halfW, this.view.x + halfW);
+    this.zoneView.update(this.view.x - halfW, this.view.x + halfW);
     this.obstacleView.update(this.view.x - halfW, this.view.x + halfW, dt);
     const mounts = this.run.mounts;
     const held = this.state === 'playing' && (this.keyHeld || this.pointersDown.size > 0);
@@ -432,6 +437,7 @@ export class PlayScene extends Phaser.Scene {
       best: Math.max(score, this.best),
       newBest,
       rides: rideSummary(st),
+      zone: st.zone,
       level,
       levelMultiplier: this.run.scoreMultiplier,
       goals: summary.goals.map((g) => ({ text: goalText(g), progress: goalProgressText(g), done: g.done, fresh: g.fresh })),
@@ -584,6 +590,9 @@ export class PlayScene extends Phaser.Scene {
         } else if (e.reason === 'release') {
           sfx?.flap();
         }
+      } else if (e.type === 'zone') {
+        if (sfx) this.hud.toast(`Zone ${e.zone}!`, `${((e.zone - 1) * ZONE_METRES).toLocaleString('en-US')} m · +${e.points} points`);
+        sfx?.zone();
       } else if (e.type === 'secondWind') {
         this.hud.toast('Second wind!', 'The avalanche fell back 30 m');
         this.spray.burst(e.x, e.y, 40);

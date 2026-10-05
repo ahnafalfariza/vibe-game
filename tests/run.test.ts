@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { Run, SECOND_WIND_PX, type RunEvent } from '../src/sim/run';
+import { Run, SECOND_WIND_PX, ZONE_POINTS, type RunEvent } from '../src/sim/run';
+import { zoneAt, zoneDensity } from '../src/sim/spawner';
 import { Score } from '../src/sim/score';
 import type { LandingQuality } from '../src/sim/skier';
 import { createTuning } from '../src/tuning';
@@ -47,6 +48,34 @@ describe('Score', () => {
     const s = new Score();
     for (let i = 0; i < 10; i++) s.land(land('clean', 3));
     expect(s.multiplier).toBe(10);
+  });
+});
+
+describe('Zones', () => {
+  it('number every 500 m, and get denser past zone 3, up to ×1.5', () => {
+    expect([0, 499.9, 500, 1499, 1500].map((m) => zoneAt(m * 40))).toEqual([1, 1, 2, 3, 4]);
+    expect(zoneAt(-100)).toBe(1);
+    expect([1, 3, 4, 6, 8, 20].map(zoneDensity)).toEqual([1, 1, 1.1, 1.3, 1.5, 1.5]);
+  });
+
+  it('mark each new zone once, with a bonus that grows', () => {
+    const run = new Run(2, createTuning({ obstacleDensity: 0, mountDensity: 0 }), { avalanche: false });
+    const idle = { held: false, pressed: false };
+    const zones: number[] = [];
+    while (run.distancePx() < 1050 * 40 && run.time < 120) {
+      const before = run.scoring.tricks;
+      const events: RunEvent[] = [];
+      run.step(idle, events);
+      for (const e of events) {
+        if (e.type !== 'zone') continue;
+        zones.push(e.zone);
+        const awards = events.reduce((n, a) => n + (a.type === 'award' ? a.points : 0), 0);
+        expect(e.points).toBe(ZONE_POINTS * e.zone);
+        expect(run.scoring.tricks - before).toBe(e.points + awards);
+      }
+    }
+    expect(zones).toEqual([2, 3]);
+    expect(run.stats.zone).toBe(3);
   });
 });
 

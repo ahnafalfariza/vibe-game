@@ -53,6 +53,7 @@ function stats(over: Partial<RunStats> = {}): RunStats {
     smashes: 0,
     eagleTime: 0,
     shieldsLost: 0,
+    zone: 1,
     ...over,
   };
 }
@@ -201,10 +202,12 @@ describe('Levels', () => {
     expect(p.goals.filter((g) => old.includes(g.id))).toEqual([]);
   });
 
-  it('banks coins and the best distance at the end of a run', () => {
+  it('banks coins, the best distance and the furthest zone at the end of a run', () => {
     const p = newProfile(10);
-    const s = new RunGoals(p, rng).finish(progress({ coins: 33 }, 812));
-    expect([s.coins, s.wallet, p.coins, p.bestMetres]).toEqual([33, 43, 43, 812]);
+    const s = new RunGoals(p, rng).finish(progress({ coins: 33, zone: 2 }, 812));
+    expect([s.coins, s.wallet, p.coins, p.bestMetres, p.bestZone]).toEqual([33, 43, 43, 812, 2]);
+    new RunGoals(p, rng).finish(progress({ zone: 1 }, 100));
+    expect(p.bestZone).toBe(2);
   });
 
   it('multiplies the whole score by the level multiplier', () => {

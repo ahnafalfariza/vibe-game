@@ -36,6 +36,8 @@ export interface Profile {
   upgrades: Partial<Record<UpgradeId, number>>;
   /** Furthest run, m. Mount goals wait until you've gone far enough to meet that mount. */
   bestMetres: number;
+  /** Furthest zone reached in any run. */
+  bestZone: number;
 }
 
 /** What a run has done so far: everything goals are measured from. */
@@ -138,12 +140,12 @@ export const LEVELS: readonly (readonly [string, number])[][] = [
   [['penguinRides', 1], ['cleanFlips', 2], ['clusters', 2]],
   [['twilightMetres', 1000], ['air', 2], ['totalCoins', 100]],
   [['eagleRides', 1], ['multiplier', 4], ['blossomMetres', 1000]],
-  [['sledRides', 1], ['bigFlip', 2], ['score', 6000]],
+  [['sledRides', 1], ['bigFlip', 2], ['score', 7000]],
   [['shields', 2], ['glacierMetres', 1500], ['clusters', 5]],
   [['bearRides', 1], ['speed', 240], ['noCrash', 800]],
   [['smashes', 3], ['variety', 3], ['emberMetres', 1200]],
   [['bigFlip', 3], ['multiplier', 8], ['distance', 2000]],
-  [['score', 16000], ['survive', 90], ['noCrash', 1200]],
+  [['score', 20000], ['survive', 90], ['noCrash', 1200]],
 ];
 
 /** Mount goals wait until the best run reaches this far past where the mount first turns up, m. */
@@ -228,6 +230,7 @@ export function newProfile(coins = 0): Profile {
     goals: goalsFor(1, 0, new Rng(1)),
     upgrades: {},
     bestMetres: 0,
+    bestZone: 1,
   };
 }
 
@@ -241,6 +244,7 @@ export function normalizeProfile(raw: unknown): Profile {
   p.coins = Math.floor(num(o.coins, 0, 0));
   p.level = Math.floor(num(o.level ?? o.rank, 1, 1));
   p.bestMetres = num(o.bestMetres, 0, 0);
+  p.bestZone = Math.floor(num(o.bestZone, 1, 1));
   if (o.upgrades && typeof o.upgrades === 'object') {
     for (const u of UPGRADES) {
       const level = (o.upgrades as Record<string, unknown>)[u.id];
@@ -385,6 +389,7 @@ export class RunGoals {
       for (const g of goals) g.progress = goalValue(g, r);
       p.coins += Math.max(0, Math.floor(r.stats.coins));
       p.bestMetres = Math.max(p.bestMetres, r.metres);
+      p.bestZone = Math.max(p.bestZone, r.stats.zone);
     }
     this.finished = true;
     const summary: RunSummary = {

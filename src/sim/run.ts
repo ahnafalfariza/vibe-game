@@ -1,6 +1,6 @@
 import { Terrain, type TerrainMix } from './terrain';
 import { Skier, type SkierEvent, type SkierInput } from './skier';
-import { Spawner, type SpawnEvent, type SpawnTable } from './spawner';
+import { Spawner, zoneAt, type SpawnEvent, type SpawnTable } from './spawner';
 import { Mounts, type MountEvent, type MountKind } from './mounts';
 import { MOUNT_POINTS, SMASH_POINTS, Score } from './score';
 import { PX_PER_METRE, type Tuning } from '../tuning';
@@ -12,6 +12,8 @@ export const SIM_DT = 1 / 120;
 const GENERATE_AHEAD = 6000;
 /** How far behind the skier terrain is kept, px. */
 const KEEP_BEHIND = 4000;
+/** Points for reaching zone N: this × N (not × the trick multiplier). */
+export const ZONE_POINTS = 100;
 /** Second wind knocks the avalanche this far back, px (30 m). */
 export const SECOND_WIND_PX = 30 * PX_PER_METRE;
 
@@ -42,6 +44,8 @@ export interface RunStats {
   eagleTime: number;
   /** Mounts knocked off by taking a hit for you. */
   shieldsLost: number;
+  /** Furthest zone reached (1 at the start). */
+  zone: number;
 }
 
 export interface RunOptions {
@@ -69,7 +73,8 @@ export type RunEvent =
   | SpawnEvent
   | MountEvent
   | { type: 'award'; x: number; y: number; points: number; multiplier: number }
-  | { type: 'secondWind'; x: number; y: number };
+  | { type: 'secondWind'; x: number; y: number }
+  | { type: 'zone'; zone: number; x: number; y: number; points: number };
 
 const perKind = (): Record<MountKind, number> => ({ penguin: 0, eagle: 0, snowmobile: 0, bear: 0 });
 
@@ -102,6 +107,7 @@ export class Run {
     smashes: 0,
     eagleTime: 0,
     shieldsLost: 0,
+    zone: 1,
   };
   readonly scoring: Score;
   /** Second wind still to come this run. */
@@ -218,6 +224,13 @@ export class Run {
       }
     }
     st.topMultiplier = Math.max(st.topMultiplier, this.scoring.multiplier);
+    // Into a new zone: a flat bonus that grows with each one.
+    for (const zone = zoneAt(this.distancePx()); st.zone < zone; ) {
+      st.zone++;
+      const points = ZONE_POINTS * st.zone;
+      this.scoring.tricks += points;
+      events.push({ type: 'zone', zone: st.zone, x: sk.x, y: sk.y, points });
+    }
     if (st.crashes === 0) st.noCrashMetres = this.distancePx() / PX_PER_METRE;
   }
 

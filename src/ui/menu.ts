@@ -69,6 +69,8 @@ export interface RunResult {
   newBest: boolean;
   /** "Rode 2 penguins · 3 smashes" ('' for none). */
   rides: string;
+  /** Furthest zone reached. */
+  zone: number;
   /** The level (and its score multiplier) the run was played at. */
   level: number;
   levelMultiplier: number;
@@ -384,7 +386,8 @@ export class Menu {
   }
 
   showTitle(best: number): void {
-    this.screens.title.querySelector('.best')!.textContent = best > 0 ? `Best ${fmt(best)}` : '';
+    const zone = getProfile().bestZone;
+    this.screens.title.querySelector('.best')!.textContent = best > 0 ? `Best ${fmt(best)}` + (zone > 1 ? ` · furthest zone ${zone}` : '') : '';
     this.renderBiome();
     this.renderTitleMeta();
     // An open panel stays open while the demo run behind it restarts.
@@ -404,7 +407,7 @@ export class Menu {
     const el = this.screens.over;
     el.querySelector('.score')!.textContent = fmt(r.score);
     (el.querySelector('.new-best') as HTMLElement).hidden = !r.newBest;
-    el.querySelector('.stats')!.textContent = `${fmt(r.metres)} m · ${r.flips} flips · best air ${r.bestAir.toFixed(1)}s`;
+    el.querySelector('.stats')!.textContent = `${fmt(r.metres)} m · zone ${r.zone} · ${r.flips} flips · best air ${r.bestAir.toFixed(1)}s`;
     const rides = el.querySelector<HTMLElement>('.rides')!;
     rides.textContent = r.rides;
     rides.hidden = r.rides === '';

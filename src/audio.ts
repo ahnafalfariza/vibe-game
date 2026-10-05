@@ -334,6 +334,15 @@ export class Sfx {
     });
   }
 
+  /** Into a new zone: a bright bell, two notes up. */
+  zone(): void {
+    [0, 7].forEach((semi, i) => {
+      const f = 1046.5 * 2 ** (semi / 12);
+      this.tone('sine', f, f, 0.6, 0.16, i * 0.12);
+      this.tone('triangle', f * 2, f * 2, 0.3, 0.05, i * 0.12);
+    });
+  }
+
   /** Second wind: a rising whoosh as the avalanche falls back. */
   secondWind(): void {
     this.noiseBurst(0.5, 'bandpass', 400, 2400, 0.35);
