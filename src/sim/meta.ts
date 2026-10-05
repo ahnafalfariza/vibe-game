@@ -291,6 +291,10 @@ export interface Perk {
   start?: Ridden;
   /** Changes the run's tuning. */
   apply?: (t: Tuning) => void;
+  /** The trick multiplier never drops below this. */
+  multiplierFloor?: number;
+  /** Once a run, the avalanche is knocked back instead of catching you. */
+  secondWind?: true;
 }
 
 export const PERKS: readonly Perk[] = [
@@ -301,6 +305,8 @@ export const PERKS: readonly Perk[] = [
   { level: 6, name: 'Glacier Gorge', text: 'Steep chutes and gaps to clear', biome: 'glacier' },
   { level: 7, name: 'Thick fur', text: 'Back on your feet 30% faster after a wipeout', apply: (t) => (t.crashDuration *= 0.7) },
   { level: 8, name: 'Ember Peak', text: 'Cliffs and ledges on a volcano', biome: 'ember' },
+  { level: 9, name: 'Second wind', text: 'Once a run, the avalanche gets knocked back when it catches you', secondWind: true },
+  { level: 10, name: 'Hot start', text: 'Your trick multiplier never drops below ×2', multiplierFloor: 2 },
 ];
 
 export function perksAt(level: number): Perk[] {
@@ -493,6 +499,8 @@ export interface RunSetup {
   /** Ride these from the start, bottom of the stack first. */
   startMount: Ridden[];
   scoreMultiplier: number;
+  multiplierFloor: number;
+  secondWind: boolean;
 }
 
 /**
@@ -501,7 +509,7 @@ export interface RunSetup {
  */
 export function runSetup(p: Profile, base: Readonly<Tuning>, demo: boolean): RunSetup {
   const tuning = { ...base };
-  if (demo) return { tuning, startMount: [], scoreMultiplier: 1 };
+  if (demo) return { tuning, startMount: [], scoreMultiplier: 1, multiplierFloor: 1, secondWind: false };
   for (const u of UPGRADES) {
     const level = upgradeLevel(p, u.id);
     if (level > 0) u.apply?.(tuning, level);
@@ -512,5 +520,11 @@ export function runSetup(p: Profile, base: Readonly<Tuning>, demo: boolean): Run
   const head = upgradeLevel(p, 'headStart');
   const animal: Ridden | undefined = head >= 2 ? 'bear' : perks.find((k) => k.start)?.start;
   const startMount: Ridden[] = [...(head >= 1 ? (['snowmobile'] as const) : []), ...(animal ? [animal] : [])];
-  return { tuning, startMount, scoreMultiplier: levelMultiplier(p.level) };
+  return {
+    tuning,
+    startMount,
+    scoreMultiplier: levelMultiplier(p.level),
+    multiplierFloor: Math.max(1, ...perks.map((k) => k.multiplierFloor ?? 1)),
+    secondWind: perks.some((k) => k.secondWind),
+  };
 }

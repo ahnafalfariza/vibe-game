@@ -132,6 +132,8 @@ export class PlayScene extends Phaser.Scene {
       table: biome.spawns,
       terrain: biome.terrain,
       scoreMultiplier: setup.scoreMultiplier,
+      multiplierFloor: setup.multiplierFloor,
+      secondWind: setup.secondWind,
     });
     this.goals = play ? new RunGoals(profile, () => new Rng(randomSeed())) : null;
     this.final = null;
@@ -582,6 +584,11 @@ export class PlayScene extends Phaser.Scene {
         } else if (e.reason === 'release') {
           sfx?.flap();
         }
+      } else if (e.type === 'secondWind') {
+        this.hud.toast('Second wind!', 'The avalanche fell back 30 m');
+        this.spray.burst(e.x, e.y, 40);
+        this.shake(400, 0.01);
+        sfx?.secondWind();
       } else if (e.type === 'smash') {
         const [sx, sy] = toScreen(e.x, e.y);
         if (sfx) this.hud.popup('Smash!', sx, sy - 200 * u, palette.bearFur, 40);

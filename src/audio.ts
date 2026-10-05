@@ -334,6 +334,13 @@ export class Sfx {
     });
   }
 
+  /** Second wind: a rising whoosh as the avalanche falls back. */
+  secondWind(): void {
+    this.noiseBurst(0.5, 'bandpass', 400, 2400, 0.35);
+    this.tone('triangle', 330, 990, 0.5, 0.18);
+    this.tone('sine', 660, 1320, 0.4, 0.08, 0.15);
+  }
+
   /** Bought an upgrade: coins clinking into the till. */
   purchase(): void {
     [0, 5, 12].forEach((semi, i) => {

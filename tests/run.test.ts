@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Run, type RunEvent } from '../src/sim/run';
+import { Run, SECOND_WIND_PX, type RunEvent } from '../src/sim/run';
 import { Score } from '../src/sim/score';
 import type { LandingQuality } from '../src/sim/skier';
 import { createTuning } from '../src/tuning';
@@ -29,6 +29,20 @@ describe('Score', () => {
     expect(s.multiplier).toBe(1);
   });
 
+  it('never drops below its floor (Hot start)', () => {
+    const s = new Score(2);
+    expect(s.multiplier).toBe(2);
+    expect(s.land(land('clean', 1))).toBe(200);
+    expect(s.multiplier).toBe(3);
+    s.land(land('crash'));
+    expect(s.multiplier).toBe(2);
+    s.land(land('clean', 1));
+    s.land(land('sloppy'));
+    expect(s.multiplier).toBe(2);
+    const run = new Run(1, createTuning(), { avalanche: false, multiplierFloor: 2 });
+    expect(run.scoring.multiplier).toBe(2);
+  });
+
   it('caps the multiplier', () => {
     const s = new Score();
     for (let i = 0; i < 10; i++) s.land(land('clean', 3));
@@ -47,6 +61,18 @@ describe('Avalanche', () => {
     const x = run.skier.x;
     for (let i = 0; i < 120; i++) run.step(idle, events);
     expect(run.skier.x).toBe(x);
+  });
+
+  it('knocks the avalanche back once with second wind, then catches you', () => {
+    const run = new Run(1, createTuning({ minSpeed: 0, maxSpeed: 0 }), { secondWind: true });
+    const events: RunEvent[] = [];
+    for (let i = 0; i < 120 * 10 && !events.some((e) => e.type === 'secondWind'); i++) run.step(idle, events);
+    expect(events.filter((e) => e.type === 'secondWind')).toHaveLength(1);
+    expect(run.caught).toBe(false);
+    expect(run.avalancheGap()).toBeGreaterThan(SECOND_WIND_PX - 50);
+    for (let i = 0; i < 120 * 10 && !run.caught; i++) run.step(idle, events);
+    expect(run.caught).toBe(true);
+    expect(events.filter((e) => e.type === 'secondWind')).toHaveLength(1);
   });
 
   it('is never further behind than the max gap', () => {

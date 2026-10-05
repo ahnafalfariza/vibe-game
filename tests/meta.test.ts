@@ -290,6 +290,16 @@ describe('Designed levels', () => {
     expect(p.goals).not.toEqual(goalsFor(10, 0, rng()));
   });
 
+  it('gives second wind from level 9 and hot start from level 10', () => {
+    const p = newProfile();
+    const at = (level: number) => {
+      p.level = level;
+      const { secondWind, multiplierFloor } = runSetup(p, DEFAULT_TUNING, false);
+      return [secondWind, multiplierFloor];
+    };
+    expect([at(8), at(9), at(10), at(14)]).toEqual([[false, 1], [true, 1], [true, 2], [true, 2]]);
+  });
+
   it('pays coins for each level-up, and names the levels past 10 Legend', () => {
     expect([2, 5, 10, 11, 30].map(levelUpCoins)).toEqual([100, 250, 500, 500, 500]);
     expect([1, 10, 11, 13].map(levelName)).toEqual(['Level 1', 'Level 10', 'Legend 1', 'Legend 3']);
@@ -378,7 +388,7 @@ describe('Shop', () => {
     p.level = 9;
     p.upgrades = { magnet: 3, cluster: 3, avalanche: 3, eagle: 3, fuel: 3, landing: 3, headStart: 2 };
     const demo = runSetup(p, DEFAULT_TUNING, true);
-    expect(demo).toEqual({ tuning: { ...DEFAULT_TUNING }, startMount: [], scoreMultiplier: 1 });
+    expect(demo).toEqual({ tuning: { ...DEFAULT_TUNING }, startMount: [], scoreMultiplier: 1, multiplierFloor: 1, secondWind: false });
     expect(demo.tuning).not.toBe(DEFAULT_TUNING);
   });
 });
