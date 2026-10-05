@@ -7,7 +7,7 @@ import '@fontsource/fredoka/600.css';
 import '@fontsource/fredoka/700.css';
 import './landing.css';
 import { DEFAULT_TUNING, PX_PER_METRE } from './tuning';
-import { PERKS, UPGRADES } from './sim/meta';
+import { PERKS, UPGRADES, levelName } from './sim/meta';
 import { Score } from './sim/score';
 
 const $ = (id: string) => document.getElementById(id)!;
@@ -154,7 +154,7 @@ judgeLanding();
 
 $('perks').innerHTML = PERKS.map(
   (p) =>
-    `<li><div class="chair${p.biome ? ' unlock' : ''}"><span class="chair-level">Level ${p.level}</span><b>${p.name}</b><span>${p.text}</span></div></li>`,
+    `<li><div class="chair${p.biome ? ' unlock' : ''}"><span class="chair-level">${levelName(p.level)}</span><b>${p.name}</b><span>${p.text}</span></div></li>`,
 ).join('');
 
 $('shop').innerHTML = [...UPGRADES]

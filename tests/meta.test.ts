@@ -11,6 +11,8 @@ import {
   drawGoals,
   goalText,
   goalsFor,
+  levelName,
+  levelUpCoins,
   newProfile,
   normalizeProfile,
   levelMultiplier,
@@ -282,10 +284,21 @@ describe('Designed levels', () => {
     const s = new RunGoals(p, rng).finish(progress({ topMultiplier: 1, noCrashMetres: 1200 }, 2000));
     expect(s.levelUp).toBeNull();
     for (const g of p.goals) g.done = true;
-    expect(new RunGoals(p, rng).finish(progress()).levelUp).toMatchObject({ level: 11, multiplier: 3.5, perks: [] });
+    expect(new RunGoals(p, rng).finish(progress()).levelUp).toMatchObject({ level: 11, multiplier: 3.5, coins: 500, finale: true });
     expect(p.goals).toHaveLength(3);
     for (const g of p.goals) expect(g.target, g.id).toBe(def(g.id).targets[4]);
     expect(p.goals).not.toEqual(goalsFor(10, 0, rng()));
+  });
+
+  it('pays coins for each level-up, and names the levels past 10 Legend', () => {
+    expect([2, 5, 10, 11, 30].map(levelUpCoins)).toEqual([100, 250, 500, 500, 500]);
+    expect([1, 10, 11, 13].map(levelName)).toEqual(['Level 1', 'Level 10', 'Legend 1', 'Legend 3']);
+    const p = withGoals(['flips', 3], ['coins', 25], ['distance', 600]);
+    p.coins = 7;
+    for (const g of p.goals) g.done = true;
+    const s = new RunGoals(p, rng).finish(progress({ coins: 20 }));
+    expect(s.levelUp).toMatchObject({ level: 2, coins: 100, finale: false });
+    expect([s.coins, s.wallet, p.coins]).toEqual([20, 127, 127]);
   });
 
   it('moves a rank-N save onto level N\'s goals, keeping progress where the goal matches', () => {

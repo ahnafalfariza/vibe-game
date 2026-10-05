@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { FONT, css, palette } from '../render/palette';
+import { levelName } from '../sim/meta';
 
 // Screen-space UI, drawn by the un-zoomed UI camera. All sizes scale with
 // screen height (designed at 720px tall; width, if the screen is narrower
@@ -141,7 +142,7 @@ export class Hud {
     this.score.setText(fmt(s.score));
     this.speed.setText(`${fmt(s.metres)} m   ${Math.round(s.kmh)} km/h`);
     this.best.setText(s.best > 0 ? `Best ${fmt(Math.max(s.best, s.score))}` : '');
-    this.level.setText(s.levelMultiplier > 1 ? `Level ${s.level}  ·  score ×${s.levelMultiplier}` : '');
+    this.level.setText(s.levelMultiplier > 1 ? `${levelName(s.level)}  ·  score ×${s.levelMultiplier}` : '');
 
     this.multiplier.setText(s.multiplier > 1 ? `×${s.multiplier}` : '');
     this.multiplier.setPosition(this.score.x + this.score.width + 12 * u, this.score.y + this.score.height * 0.55);

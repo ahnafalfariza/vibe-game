@@ -271,6 +271,16 @@ export function levelMultiplier(level: number): number {
   return 1 + 0.25 * (level - 1);
 }
 
+/** "Level 7", or past the designed levels "Legend 2". */
+export function levelName(level: number): string {
+  return level > LEVELS.length ? `Legend ${level - LEVELS.length}` : `Level ${level}`;
+}
+
+/** Coins for reaching `level`: 50 a level, so 500 for every Legend level. */
+export function levelUpCoins(level: number): number {
+  return 50 * Math.min(level, LEVELS.length);
+}
+
 export interface Perk {
   level: number;
   name: string;
@@ -314,7 +324,8 @@ export interface RunSummary {
   wallet: number;
   /** The goals that were active during the run, as they stand after it. */
   goals: (Goal & { fresh: boolean })[];
-  levelUp: { level: number; multiplier: number; perks: Perk[] } | null;
+  /** `coins`: the level-up bonus, already in `wallet`. `finale`: that was the last designed level. */
+  levelUp: { level: number; multiplier: number; perks: Perk[]; coins: number; finale: boolean } | null;
 }
 
 /** One run's view of the profile's goals: checked live, settled at the end. */
@@ -360,8 +371,17 @@ export class RunGoals {
     };
     if (goals.every((g) => g.done)) {
       p.level++;
+      const coins = levelUpCoins(p.level);
+      p.coins += coins;
+      summary.wallet = p.coins;
       p.goals = goalsFor(p.level, p.bestMetres, this.rng(), goals.map((g) => g.id));
-      summary.levelUp = { level: p.level, multiplier: levelMultiplier(p.level), perks: PERKS.filter((k) => k.level === p.level) };
+      summary.levelUp = {
+        level: p.level,
+        multiplier: levelMultiplier(p.level),
+        perks: PERKS.filter((k) => k.level === p.level),
+        coins,
+        finale: p.level === LEVELS.length + 1,
+      };
     }
     return summary;
   }

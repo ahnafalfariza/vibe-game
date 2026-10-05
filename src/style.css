@@ -385,6 +385,63 @@ body {
   color: var(--orange-dark);
 }
 
+/* Level path on the Goals card: levels 1–10, then Legend. */
+.level-path {
+  display: grid;
+  grid-template-columns: repeat(11, minmax(0, 1fr));
+  gap: 4px;
+  margin: 8px 0 2px;
+  padding: 0;
+  list-style: none;
+}
+
+.pip {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  max-width: 34px;
+  aspect-ratio: 1;
+  margin: 0 auto;
+  padding: 0;
+  border: 2.5px solid var(--ink);
+  border-radius: 50%;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  font-size: clamp(11px, 2.2vmin, 15px);
+  cursor: pointer;
+}
+
+.pip.done {
+  background: #5fd38d;
+}
+
+.pip.current {
+  background: var(--orange);
+  color: #fff;
+  box-shadow: 0 0 0 3px var(--yellow);
+}
+
+/* A level that unlocks something wears a gold dot. */
+.pip.perk::after {
+  content: '';
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 9px;
+  height: 9px;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  background: var(--yellow);
+}
+
+.pip:focus-visible {
+  outline: 3px solid var(--ink);
+  outline-offset: 2px;
+}
+
 /* Goals and Shop panels */
 .panel {
   width: min(560px, 100%);
@@ -554,6 +611,15 @@ body {
   line-height: 1.1;
   color: #fff;
   animation: pulse 0.8s ease-in-out infinite alternate;
+}
+
+.screen .levelup-coins {
+  font-weight: 600;
+}
+
+/* Finishing level 10. */
+.levelup.finale {
+  background: linear-gradient(135deg, #f5b81c, var(--orange));
 }
 
 .unlocks {

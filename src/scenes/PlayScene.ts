@@ -436,6 +436,8 @@ export class PlayScene extends Phaser.Scene {
       levelUp: summary.levelUp && {
         level: summary.levelUp.level,
         multiplier: summary.levelUp.multiplier,
+        coins: summary.levelUp.coins,
+        finale: summary.levelUp.finale,
         unlocks: summary.levelUp.perks.map(({ name, text }) => ({ name, text })),
       },
     });
