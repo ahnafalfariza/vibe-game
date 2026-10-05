@@ -286,7 +286,9 @@ describe('Designed levels', () => {
     const s = new RunGoals(p, rng).finish(progress({ topMultiplier: 1, noCrashMetres: 1200 }, 2000));
     expect(s.levelUp).toBeNull();
     for (const g of p.goals) g.done = true;
-    expect(new RunGoals(p, rng).finish(progress()).levelUp).toMatchObject({ level: 11, multiplier: 3.5, coins: 500, finale: true });
+    const up = new RunGoals(p, rng).finish(progress()).levelUp;
+    expect(up).toMatchObject({ level: 11, multiplier: 3.5, coins: 500, finale: true });
+    expect(up!.perks.map((k) => k.name)).toEqual(['Golden fur']);
     expect(p.goals).toHaveLength(3);
     for (const g of p.goals) expect(g.target, g.id).toBe(def(g.id).targets[4]);
     expect(p.goals).not.toEqual(goalsFor(10, 0, rng()));

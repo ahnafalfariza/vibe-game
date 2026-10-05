@@ -1,7 +1,7 @@
-import { applyPalette, type PaletteKey } from './render/palette';
+import { GOLDEN_FUR, applyPalette, type PaletteKey } from './render/palette';
 import { ALPINE, type SpawnKind, type SpawnTable } from './sim/spawner';
 import type { FeatureKind, TerrainMix } from './sim/terrain';
-import { biomeUnlocked } from './sim/meta';
+import { biomeUnlocked, perksAt } from './sim/meta';
 import { getProfile } from './profile';
 
 // Biomes: the same game on a different mountain. A biome repaints the world
@@ -248,7 +248,9 @@ export function findBiome(id: string | null): Biome | undefined {
 /** Switch biome (unknown ids fall back to the first). Call before building views. */
 export function applyBiome(id: string): Biome {
   active = findBiome(id) ?? BIOMES[0];
-  applyPalette(active.colors);
+  // A Yeti Legend skis in golden fur, on every mountain.
+  const golden = perksAt(getProfile().level).some((k) => k.golden);
+  applyPalette({ ...active.colors, ...(golden ? GOLDEN_FUR : {}) });
   return active;
 }
 

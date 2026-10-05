@@ -310,6 +310,8 @@ export interface Perk {
   multiplierFloor?: number;
   /** Once a run, the avalanche is knocked back instead of catching you. */
   secondWind?: true;
+  /** The yeti's fur turns gold. */
+  golden?: true;
 }
 
 export const PERKS: readonly Perk[] = [
@@ -322,6 +324,7 @@ export const PERKS: readonly Perk[] = [
   { level: 8, name: 'Ember Peak', text: 'Cliffs and ledges on a volcano', biome: 'ember' },
   { level: 9, name: 'Second wind', text: 'Once a run, the avalanche gets knocked back when it catches you', secondWind: true },
   { level: 10, name: 'Hot start', text: 'Your trick multiplier never drops below ×2', multiplierFloor: 2 },
+  { level: LEVELS.length + 1, name: 'Golden fur', text: 'Your yeti turns gold', golden: true },
 ];
 
 export function perksAt(level: number): Perk[] {

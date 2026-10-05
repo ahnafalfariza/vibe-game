@@ -5,7 +5,8 @@ import { Terrain, type TemplateKind } from '../src/sim/terrain';
 import { createTuning } from '../src/tuning';
 import { BIOMES, applyBiome, findBiome, type Biome } from '../src/biomes';
 import { PERKS } from '../src/sim/meta';
-import { palette } from '../src/render/palette';
+import { GOLDEN_FUR, palette } from '../src/render/palette';
+import { getProfile } from '../src/profile';
 
 /** Every entity the spawner places up to `toX` on a biome's mountain, in order. Mounts are off: these tests are about the obstacles. */
 function spawnAll(seed: number, toX: number, biome: Biome): Entity[] {
@@ -102,6 +103,22 @@ describe('Biomes', () => {
     }
     expect(palette.snow).not.toBe(alpine.snow);
     applyBiome('alpine');
+    expect(palette).toEqual(alpine);
+  });
+
+  it('dress a Yeti Legend in golden fur on every mountain', () => {
+    const alpine = { ...palette };
+    const p = getProfile();
+    p.level = 11;
+    try {
+      for (const b of BIOMES) {
+        applyBiome(b.id);
+        expect({ fur: palette.fur, furLine: palette.furLine, beanie: palette.beanie }, b.id).toEqual({ fur: GOLDEN_FUR.fur, furLine: GOLDEN_FUR.furLine, beanie: alpine.beanie });
+      }
+    } finally {
+      p.level = 1;
+      applyBiome('alpine');
+    }
     expect(palette).toEqual(alpine);
   });
 
